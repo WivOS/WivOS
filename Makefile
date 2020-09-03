@@ -1,4 +1,4 @@
-CFLAGS := -Wall -Werror -ffreestanding -fno-pic -Ikernel -O2 -g
+CFLAGS := -Wall -Werror -ffreestanding -Wno-unused-variable -Wno-parentheses -fno-pic -Ikernel -O2 -g
 LDFLAGS := -nostdlib -no-pie
 
 ifeq ($(DEBUG), 1)
