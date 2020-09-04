@@ -1,5 +1,6 @@
 #include "util.h"
 #include <stdbool.h>
+#include <util/string.h>
 
 void outb(uint16_t p, uint8_t d) {
     asm volatile("outb %b0, %w1" :: "a"(d), "Nd"(p));
@@ -29,36 +30,6 @@ uint32_t inl(uint16_t p) {
     uint32_t retVal;
     asm volatile("inl %w1, %0" : "=a"(retVal) : "Nd"(p));
     return retVal;
-}
-
-#define memset __builtin_memset
-
-char *strcpy(char *dest, const char *src) {
-    size_t i;
-
-    for (i = 0; src[i]; i++)
-        dest[i] = src[i];
-
-    dest[i] = 0;
-
-    return dest;
-}
-
-char *strcat(char *dest, const char *src)
-{
-    char *rdest = dest;
-
-    while (*dest) dest++;
-    while (*dest++ = *src++);
-    return rdest;
-}
-
-size_t strlen(const char *str) {
-    size_t len;
-
-    for (len = 0; str[len]; len++);
-
-    return len;
 }
 
 char* __int_str(uint64_t i, char b[], int base, bool plusSignIfNeeded, bool spaceSignIfNeeded,

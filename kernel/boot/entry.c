@@ -1,5 +1,6 @@
 #include "stivale2.h"
 #include <util/util.h>
+#include <mem/pmm.h>
 
 uint8_t g_bootstrap_stack[0x1000] = {0};
 
@@ -39,7 +40,7 @@ void kentry(stivale2_struct_t *stivale) {
                     stivale2_struct_tag_memmap_t *memmaptag = (stivale2_struct_tag_memmap_t *)currTag;
                     printf("[Stivale2]\t\t\tMemory map with %d entries:\n", memmaptag->entries);
                     for(int i = 0; i < memmaptag->entries; i++) {
-                        stivale2_mmap_entry_t* entry = (stivale2_mmap_entry_t *)((size_t)&memmaptag->memmap[i] + 8);
+                        stivale2_mmap_entry_t* entry = (stivale2_mmap_entry_t *)((size_t)&memmaptag->memmap[i]);
                         char *str = "Unknown";
                         switch(entry->type) {
                             case USABLE:                    str = "USABLE"; break;
@@ -91,6 +92,8 @@ void kentry(stivale2_struct_t *stivale) {
         }
         stivaleTags = currTag->next;
     }
+
+    pmm_init(stivale);
 
     printf("WivOS Booted, halting\n");
     while(1) {

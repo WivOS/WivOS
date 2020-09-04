@@ -1,4 +1,4 @@
-CFLAGS := -Wall -Werror -ffreestanding -Wno-unused-variable -Wno-parentheses -fno-pic -Ikernel -O2 -g
+CFLAGS := -Wall -Werror -ffreestanding -Wno-unused-variable -Wno-parentheses -Wno-unused-function -fno-pic -Ikernel -O2 -g
 LDFLAGS := -nostdlib -no-pie
 
 ifeq ($(DEBUG), 1)
@@ -11,6 +11,8 @@ endif
 
 SRCS += kernel/util/debug.c
 SRCS += kernel/util/util.c
+SRCS += kernel/util/string.c
+SRCS += kernel/mem/pmm.c
 
 include boot.mk
 
