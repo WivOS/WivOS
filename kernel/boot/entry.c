@@ -1,6 +1,7 @@
 #include "stivale2.h"
 #include <util/util.h>
 #include <mem/pmm.h>
+#include <mem/vmm.h>
 #include <cpu/gdt.h>
 
 uint8_t g_bootstrap_stack[0x1000] = {0};
@@ -96,6 +97,7 @@ void kentry(stivale2_struct_t *stivale) {
 
     init_gdt();
     pmm_init(stivale);
+    vmm_init();
 
     printf("WivOS Booted, halting\n");
     while(1) {

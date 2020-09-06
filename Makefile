@@ -13,6 +13,7 @@ SRCS += kernel/util/debug.c
 SRCS += kernel/util/util.c
 SRCS += kernel/util/string.c
 SRCS += kernel/mem/pmm.c
+SRCS += kernel/mem/vmm.c
 SRCS += kernel/cpu/gdt.c
 
 include boot.mk
