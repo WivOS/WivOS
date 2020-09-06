@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <stdarg.h>
+#include "string.h"
 
 void outb(uint16_t p, uint8_t d);
 void outw(uint16_t p, uint16_t d);
