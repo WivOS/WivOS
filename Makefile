@@ -21,6 +21,23 @@ SRCS += kernel/cpu/idt.c
 
 SRCS += kernel/cpu/isr.asm
 
+#CFLAGS += -Ideps/lai/include
+#SRCS += deps/lai/core/error.c
+#SRCS += deps/lai/core/eval.c
+#SRCS += deps/lai/core/exec.c
+#SRCS += deps/lai/core/exec-operand.c
+#SRCS += deps/lai/core/libc.c
+#SRCS += deps/lai/core/ns.c
+#SRCS += deps/lai/core/object.c
+#SRCS += deps/lai/core/opregion.c
+#SRCS += deps/lai/core/os_methods.c
+#SRCS += deps/lai/core/variable.c
+#SRCS += deps/lai/core/vsnprintf.c
+#SRCS += deps/lai/helpers/pci.c
+#SRCS += deps/lai/helpers/pm.c
+#SRCS += deps/lai/helpers/resource.c
+#SRCS += deps/lai/helpers/sci.c
+
 include boot.mk
 
 .PHONY: default qemu image clean clean-all
