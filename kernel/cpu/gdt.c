@@ -5,7 +5,7 @@ void lgdt(gdt_pointer_t* gdt) {
 }
 
 static gdt_entry_t gdtEntries[5] = {
-    {
+    { //null
         .limit = 0x0000,
         .base_low = 0x0000,
         .base_mid = 0x00,
@@ -13,7 +13,7 @@ static gdt_entry_t gdtEntries[5] = {
         .access = 0b00000000,
         .granularity = 0b00000000
     },
-    {
+    { //kernel code
         .limit = 0x0000,
         .base_low = 0x0000,
         .base_mid = 0x00,
@@ -21,7 +21,7 @@ static gdt_entry_t gdtEntries[5] = {
         .access = 0b10011010,
         .granularity = 0b10101111
     },
-    {
+    { //kernel data
         .limit = 0x0000,
         .base_low = 0x0000,
         .base_mid = 0x00,
@@ -29,7 +29,7 @@ static gdt_entry_t gdtEntries[5] = {
         .access = 0b10010010,
         .granularity = 0b00000000
     },
-    {
+    { //user data
         .limit = 0x0000,
         .base_low = 0x0000,
         .base_mid = 0x00,
@@ -37,7 +37,7 @@ static gdt_entry_t gdtEntries[5] = {
         .access = 0b11110010,
         .granularity = 0b00000000
     },
-    {
+    { //user code
         .limit = 0x0000,
         .base_low = 0x0000,
         .base_mid = 0x00,
@@ -52,7 +52,7 @@ static gdt_pointer_t gdtPointer = {
     .entries = (gdt_entry_t **)&gdtEntries
 };
 
-void init_gdt() {
+void gdt_init() {
     lgdt(&gdtPointer);
 
     asm volatile(

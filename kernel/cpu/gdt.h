@@ -18,4 +18,4 @@ typedef struct gdt_pointer {
     gdt_entry_t **entries;
 } __attribute__((packed)) gdt_pointer_t;
 
-void init_gdt();
+void gdt_init();

@@ -17,6 +17,9 @@ SRCS += kernel/mem/pmm.c
 SRCS += kernel/mem/vmm.c
 SRCS += kernel/mem/mm.c
 SRCS += kernel/cpu/gdt.c
+SRCS += kernel/cpu/idt.c
+
+SRCS += kernel/cpu/isr.asm
 
 include boot.mk
 
@@ -35,6 +38,10 @@ $(BIN_DIR)/wivos.elf: $(OBJS)
 $(BUILD_DIR)/%.c.o: %.c
 	@mkdir -p $(@D)
 	gcc -m64 -MMD $(CFLAGS) -D__FILENAME__="\"$<\"" -D__MODULE__="\"$(notdir $(basename $<))\"" -c $< -o $@
+
+$(BUILD_DIR)/%.asm.o: %.asm
+	@mkdir -p $(@D)
+	nasm $< -f elf64 -o $@
 
 qemu: $(BIN_DIR)/image.hdd
 	qemu-system-x86_64.exe -hdd $^ --accel whpx -m 4G -smp 4 -machine q35 -debugcon stdio

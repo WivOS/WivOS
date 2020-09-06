@@ -4,6 +4,7 @@
 #include <mem/vmm.h>
 #include <mem/mm.h>
 #include <cpu/gdt.h>
+#include <cpu/idt.h>
 
 uint8_t g_bootstrap_stack[0x1000] = {0};
 
@@ -96,9 +97,12 @@ void kentry(stivale2_struct_t *stivale) {
         stivaleTags = currTag->next;
     }
 
-    init_gdt();
+    gdt_init();
+    idt_init();
     pmm_init(stivale);
     vmm_init();
+
+    asm volatile("sti");
 
     printf("WivOS Booted, halting\n");
     while(1) {
