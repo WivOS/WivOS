@@ -10,6 +10,17 @@ void *memset(void *s, int c, size_t n) {
     return s;
 }
 
+void *memcpy(void *d, void *s, size_t n) {
+    uint8_t *p = d;
+    uint8_t *p2 = s;
+
+    for (size_t i = 0; i < n; i++) {
+        p[i] = p2[i];
+    }
+
+    return d;
+}
+
 char *strcpy(char *dest, const char *src) {
     size_t i;
 

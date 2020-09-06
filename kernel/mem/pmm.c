@@ -1,6 +1,7 @@
 #include <mem/pmm.h>
 #include <util/util.h>
 #include <util/string.h>
+#include <util/lock.h>
 
 uint64_t *pmmBitmap = NULL;
 uint64_t pmmLength = 0;
@@ -29,6 +30,8 @@ static int pmm_bitmap_isfree(size_t index, size_t count) {
 
     return 1;
 }
+
+spinlock_t global_pmm_lock = INIT_LOCK();
 
 void pmm_init(stivale2_struct_t *stivale) {
     printf("[PMM]Initialisation in progress\n");
@@ -88,12 +91,12 @@ void pmm_init(stivale2_struct_t *stivale) {
                         start = 0x2000000ULL;
                     }
 
-                    if(0x2000000ULL >= start / 8 && (0x2000000ULL + pmmLength) <= (start + length)) {
+                    if(0x2000000ULL >= start && (0x2000000ULL + (pmmLength / 8)) <= (start + length)) {
                         if(start < 0x2000000ULL) {
                             pmm_free((void *)start, (start - 0x2000000ULL) / PAGE_SIZE);
                         }
 
-                        start = 0x2000000ULL + (length / 8);
+                        start = 0x2000000ULL + (pmmLength / 8);
                         length -= pmmLength / 8;
                     }
 
@@ -131,6 +134,7 @@ void *pmm_alloc_nonzero(size_t count) {
 }
 
 void *pmm_alloc_advanced(size_t count, size_t alignment, uint64_t upper) {
+    spinlock_lock(&global_pmm_lock);
     size_t index = 0x2000000ULL / PAGE_SIZE;
     size_t max_idx = 0;
 
@@ -151,8 +155,12 @@ void *pmm_alloc_advanced(size_t count, size_t alignment, uint64_t upper) {
 
         memset((void *)(index * PAGE_SIZE + VIRT_PHYS_BASE), 0, PAGE_SIZE);
 
+        spinlock_unlock(&global_pmm_lock);
+
         return (void *)(index * PAGE_SIZE);
     }
+
+    spinlock_unlock(&global_pmm_lock);
 
     return NULL;
 }

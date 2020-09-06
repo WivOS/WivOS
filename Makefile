@@ -12,8 +12,10 @@ endif
 SRCS += kernel/util/debug.c
 SRCS += kernel/util/util.c
 SRCS += kernel/util/string.c
+SRCS += kernel/util/lock.c
 SRCS += kernel/mem/pmm.c
 SRCS += kernel/mem/vmm.c
+SRCS += kernel/mem/mm.c
 SRCS += kernel/cpu/gdt.c
 
 include boot.mk

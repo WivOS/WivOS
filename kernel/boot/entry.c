@@ -2,6 +2,7 @@
 #include <util/util.h>
 #include <mem/pmm.h>
 #include <mem/vmm.h>
+#include <mem/mm.h>
 #include <cpu/gdt.h>
 
 uint8_t g_bootstrap_stack[0x1000] = {0};

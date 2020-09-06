@@ -56,7 +56,7 @@ char* __int_str(uint64_t i, char b[], int base, bool plusSignIfNeeded, bool spac
         *p++ = ' ';
     }
  
-    intmax_t shifter = i;
+    uint64_t shifter = i;
     do {
         ++p;
         shifter = shifter / base;
