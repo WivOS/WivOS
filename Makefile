@@ -1,4 +1,4 @@
-CFLAGS := -Wall -Werror -ffreestanding -Wno-unused-variable -Wno-parentheses -Wno-unused-function -fno-pic -Ikernel -O2 -g
+CFLAGS := -Wall -ffreestanding -Wno-unused-variable -Wno-parentheses -Wno-unused-function -fno-pic -Ikernel -O2 -g
 LDFLAGS := -nostdlib -no-pie
 
 ifeq ($(DEBUG), 1)
@@ -13,11 +13,14 @@ SRCS += kernel/util/debug.c
 SRCS += kernel/util/util.c
 SRCS += kernel/util/string.c
 SRCS += kernel/util/lock.c
+SRCS += kernel/util/list.c
 SRCS += kernel/mem/pmm.c
 SRCS += kernel/mem/vmm.c
 SRCS += kernel/mem/mm.c
 SRCS += kernel/cpu/gdt.c
 SRCS += kernel/cpu/idt.c
+
+SRCS += kernel/fs/vfs.c
 
 SRCS += kernel/cpu/isr.asm
 
@@ -61,7 +64,7 @@ $(BUILD_DIR)/%.asm.o: %.asm
 	nasm $< -f elf64 -o $@
 
 qemu: $(BIN_DIR)/image.hdd
-	qemu-system-x86_64.exe -hdd $^ --accel whpx -m 4G -smp 4 -machine q35 -debugcon stdio
+	powershell.exe -File run.ps1
 
 image: $(BIN_DIR)/image.hdd
 

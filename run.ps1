@@ -1,0 +1,1 @@
+E:\qemu\qemu-system-x86_64.exe -hdd \\wsl$\Ubuntu-18.04\home\jesus\proyectos\RWivOS\bin\RELEASE\image.hdd --accel whpx -m 4G -smp 4 -machine q35 -debugcon stdio

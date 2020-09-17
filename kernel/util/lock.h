@@ -3,6 +3,28 @@
 #include <stdatomic.h>
 #include <stdbool.h>
 
+#define locked_inc(var) ({ \
+    int ret; \
+    asm volatile ( \
+        "lock inc %1;" \
+        : "=@ccnz" (ret) \
+        : "m" (*(var)) \
+        : "memory" \
+    ); \
+    ret; \
+})
+
+#define locked_dec(var) ({ \
+    int ret; \
+    asm volatile ( \
+        "lock dec %1;" \
+        : "=@ccnz" (ret) \
+        : "m" (*(var)) \
+        : "memory" \
+    ); \
+    ret; \
+})
+
 typedef struct lock {
     atomic_size_t lock;
     atomic_size_t next_lock;

@@ -111,8 +111,16 @@ static inline void _out_char(char character, void* buffer, size_t idx, size_t ma
     }
 }
 
+static inline void _out_buffer(char character, void* buffer, size_t idx, size_t maxlen)
+{
+    if (idx < maxlen) {
+        ((char *)buffer)[idx] = character;
+    }
+}
+
 void displayCharacter(char c, int* a, out_fct_type out, char* buffer, size_t maxlen) {
-    out(c, buffer, *a++, maxlen);
+    out(c, buffer, *a, maxlen);
+    *a += 1;
 }
  
 void displayString(char* c, int* a, out_fct_type out, char* buffer, size_t maxlen) {
@@ -458,6 +466,15 @@ int printf(const char* format, ...)
     va_start(va, format);
     char buffer[1];
     const int ret = _vsnprintf(_out_char, buffer, (size_t)-1, format, va);
+    va_end(va);
+    return ret;
+}
+
+int sprintf(char* buffer, const char* format, ...)
+{
+    va_list va;
+    va_start(va, format);
+    const int ret = _vsnprintf(_out_buffer, buffer, (size_t)-1, format, va);
     va_end(va);
     return ret;
 }

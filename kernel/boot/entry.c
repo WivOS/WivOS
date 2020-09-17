@@ -5,6 +5,7 @@
 #include <mem/mm.h>
 #include <cpu/gdt.h>
 #include <cpu/idt.h>
+#include <fs/vfs.h>
 
 uint8_t g_bootstrap_stack[0x1000] = {0};
 
@@ -101,6 +102,15 @@ void kentry(stivale2_struct_t *stivale) {
     idt_init();
     pmm_init(stivale);
     vmm_init();
+
+    vfs_init();
+
+    //Test mounting
+    vfs_node_t *rootNode = (vfs_node_t *)kcalloc(sizeof(vfs_node_t *), 1);
+    strcpy(rootNode->name, "VFS");
+    vfs_mount("/", rootNode);
+
+    print_vfstree();
 
     asm volatile("sti");
 

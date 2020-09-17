@@ -3,7 +3,10 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <stdarg.h>
-#include "string.h"
+#include "./string.h"
+#include "lock.h"
+#include <mem/mm.h>
+#include "list.h"
 
 void outb(uint16_t p, uint8_t d);
 void outw(uint16_t p, uint16_t d);
@@ -16,3 +19,4 @@ uint32_t inl(uint16_t p);
 void debug_out_char(char o);
 
 int printf(const char* format, ...);
+int sprintf(char* buffer, const char* format, ...);
