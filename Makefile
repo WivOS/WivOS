@@ -74,7 +74,7 @@ qemu: $(BIN_DIR)/image.hdd
 
 image: $(BIN_DIR)/image.hdd
 
-$(BIN_DIR)/initrd.tar:
+$(BIN_DIR)/initrd.tar: $(INITRD)/*
 	@shopt -s dotglob && pushd $(INITRD) > /dev/null && tar -cf ../$@ * && popd > /dev/null
 
 $(BIN_DIR)/image.hdd: $(BIN_DIR)/wivos.elf $(BIN_DIR)/initrd.tar boot/limine.cfg boot/limine.bin boot/limine-install
