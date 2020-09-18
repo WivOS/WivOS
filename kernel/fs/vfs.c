@@ -26,7 +26,7 @@ void vfs_close(vfs_node_t *node) {
 }
 
 vfs_node_t *vfs_finddir(vfs_node_t *node, char *name) {
-    if(!node || !(node->flags & FS_DIRECTORY) || !node->functions.close) return NULL;
+    if(!node || !(node->flags & FS_DIRECTORY) || !node->functions.finddir) return NULL;
     return (vfs_node_t *)node->functions.finddir((struct vfs_node_t *)node, name);
 }
 

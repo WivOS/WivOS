@@ -1,3 +1,5 @@
+SHELL = /bin/bash
+
 CFLAGS := -Wall -ffreestanding -Wno-unused-variable -Wno-parentheses -Wno-unused-function -fno-pic -Ikernel -O2 -g
 LDFLAGS := -nostdlib -no-pie
 
@@ -21,6 +23,8 @@ SRCS += kernel/cpu/gdt.c
 SRCS += kernel/cpu/idt.c
 
 SRCS += kernel/fs/vfs.c
+
+SRCS += kernel/fs/initrd/tar.c
 
 SRCS += kernel/cpu/isr.asm
 
@@ -47,6 +51,8 @@ include boot.mk
 
 default: image
 
+INITRD := initrd
+
 OBJS := $(SRCS:%=$(BUILD_DIR)/%.o)
 DEPS := $(OBJS:%.o=%.d)
 -include $(DEPS)
@@ -68,7 +74,10 @@ qemu: $(BIN_DIR)/image.hdd
 
 image: $(BIN_DIR)/image.hdd
 
-$(BIN_DIR)/image.hdd: $(BIN_DIR)/wivos.elf boot/limine.cfg boot/limine.bin boot/limine-install
+$(BIN_DIR)/initrd.tar:
+	@shopt -s dotglob && pushd $(INITRD) > /dev/null && tar -cf ../$@ * && popd > /dev/null
+
+$(BIN_DIR)/image.hdd: $(BIN_DIR)/wivos.elf $(BIN_DIR)/initrd.tar boot/limine.cfg boot/limine.bin boot/limine-install
 	@mkdir -p $(@D)
 	@echo "Creating disk"
 	@rm -rf $@
@@ -79,6 +88,7 @@ $(BIN_DIR)/image.hdd: $(BIN_DIR)/wivos.elf boot/limine.cfg boot/limine.bin boot/
 	@echfs-utils -m -p0 $@ quick-format 32768
 	@echo "Importing files"
 	@echfs-utils -m -p0 $@ import $(BIN_DIR)/wivos.elf wivos.elf
+	@echfs-utils -m -p0 $@ import $(BIN_DIR)/initrd.tar initrd.tar
 	@echfs-utils -m -p0 $@ import boot/limine.cfg limine.cfg
 	@echo "Installing limine"
 	@boot/limine-install boot/limine.bin $@

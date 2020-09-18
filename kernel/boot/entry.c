@@ -6,6 +6,7 @@
 #include <cpu/gdt.h>
 #include <cpu/idt.h>
 #include <fs/vfs.h>
+#include <fs/initrd/tar.h>
 
 uint8_t g_bootstrap_stack[0x1000] = {0};
 
@@ -41,6 +42,8 @@ void kentry(stivale2_struct_t *stivale) {
     printf("[Stivale2]\tBootloader brand: %s\n", stivale->bootloader_brand);
     printf("[Stivale2]\tBootloader version: %s\n", stivale->bootloader_version);
     
+    stivale2_module_t *initrdModule;
+
     printf("[Stivale2]\tTags:\n");
     uint64_t stivaleTags = stivale->tags;
     while(1) {
@@ -74,6 +77,20 @@ void kentry(stivale2_struct_t *stivale) {
                 {
                     stivale2_struct_tag_framebuffer_t *framebuffertag = (stivale2_struct_tag_framebuffer_t *)currTag;
                     printf("[Stivale2]\t\t\tFramebuffer:\n[Stivale2]\t\t\tAddr: 0x%lx\n[Stivale2]\t\t\tWidth: %dpx\n[Stivale2]\t\t\tHeight: %dpx\n[Stivale2]\t\t\tPitch: 0x%x\n[Stivale2]\t\t\tBpp: %d\n", framebuffertag->framebuffer_addr, framebuffertag->framebuffer_width, framebuffertag->framebuffer_height, framebuffertag->framebuffer_pitch, framebuffertag->framebuffer_bpp);
+                }
+                break;
+            case TAG_MODULES:
+                {
+                    stivale2_struct_tag_modules_t *modulestag = (stivale2_struct_tag_modules_t *)currTag;
+                    printf("[Stivale2]\t\t\tModules count: %lx\n", modulestag->module_count);
+                    for(size_t i = 0; i < modulestag->module_count; i++) {
+                        stivale2_module_t *module = (stivale2_module_t *)&modulestag->modules[i];
+                        printf("[Stivale2]\t\t\tModules string: %s\n", module->string);
+                        printf("[Stivale2]\t\t\t\tStart: 0x%lx, End 0x%lx: %s\n", module->begin, module->end);
+                        if(strcmp(module->string, "initrd") == 0) {
+                            initrdModule = (void *)((uint64_t)module + VIRT_PHYS_BASE);
+                        }
+                    }
                 }
                 break;
             case TAG_EPOCH:
@@ -121,11 +138,15 @@ void kentry(stivale2_struct_t *stivale) {
     rootNode->functions.read = testRead;
     vfs_mount("/dev/", rootNode);
 
+    parseTarInitrd((void *)(initrdModule->begin + VIRT_PHYS_BASE));
+
     print_vfstree();
 
-    vfs_node_t *node = kopen("/dev", 0);
-
-    printf("0x%lx\n", vfs_read(node, NULL, 0x10, 0x40));
+    vfs_node_t *node = kopen("/hola.txt", 0);
+    char buffer[1000];
+    vfs_read(node, buffer, 0, 999);
+    buffer[999] = '\0';
+    printf("%s\n", buffer);
 
     asm volatile("sti");
 
