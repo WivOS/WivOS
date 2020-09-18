@@ -104,6 +104,42 @@ int strcmp(const char *dst, char *src) {
     return 1;
 }
 
+int strncmp(const char* s1, const char* s2, int c) {
+    int result = 0;
+
+    while (c) {
+        result = *s1 - *s2++;
+        if ((result != 0 ) || (*s1++ == 0)) {
+            break;
+        }
+        c--;
+    }
+
+    return result;
+}
+
+char *strstr(const char *in, const char *str) {
+    char c;
+    uint32_t len;
+
+    c = *str++;
+    if (!c)
+        return (char *) in;
+
+    len = strlen(str);
+    do {
+        char sc;
+
+        do {
+            sc = *in++;
+            if (!sc)
+                return (char *) 0;
+        } while (sc != c);
+    } while (strncmp(in, str, len) != 0);
+
+    return (char *) (in - 1);
+}
+
 char *strsep(char **stringp, const char *delim) {
     char *s;
     const char *spanp;

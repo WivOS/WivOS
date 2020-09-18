@@ -25,6 +25,15 @@ stivale2_header_t header = {
     .tags = (uint64_t)&g_header_tag_framebuffer
 };
 
+static void testOpen() {
+    return;
+}
+
+static size_t testRead(vfs_node_t *node, char *buffer, size_t offset, size_t size) {
+    printf("Drive readed, Offset: 0x%lx Size: 0x%lx\n", offset, size);
+    return 1;
+}
+
 void kentry(stivale2_struct_t *stivale) {
     printf("Initializing WivOS\n");
 
@@ -108,9 +117,15 @@ void kentry(stivale2_struct_t *stivale) {
     //Test mounting
     vfs_node_t *rootNode = (vfs_node_t *)kcalloc(sizeof(vfs_node_t *), 1);
     strcpy(rootNode->name, "VFS");
-    vfs_mount("/", rootNode);
+    rootNode->functions.open = testOpen;
+    rootNode->functions.read = testRead;
+    vfs_mount("/dev/", rootNode);
 
     print_vfstree();
+
+    vfs_node_t *node = kopen("/dev", 0);
+
+    printf("0x%lx\n", vfs_read(node, NULL, 0x10, 0x40));
 
     asm volatile("sti");
 

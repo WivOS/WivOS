@@ -18,10 +18,16 @@ void vfs_open(vfs_node_t *node, uint32_t flags) {
     if(node->refcount >= 0) node->refcount++;
     node->functions.open((struct vfs_node_t *)node, flags);
 }
+
 void vfs_close(vfs_node_t *node) {
     if(!node || !node->functions.close) return -1;
     node->refcount--;
     if(node->refcount == 0) node->functions.close((struct vfs_node_t *)node);
+}
+
+vfs_node_t *vfs_finddir(vfs_node_t *node, char *name) {
+    if(!node || !(node->flags & FS_DIRECTORY) || !node->functions.close) return NULL;
+    return (vfs_node_t *)node->functions.finddir((struct vfs_node_t *)node, name);
 }
 
 // Utils
@@ -66,6 +72,102 @@ void vfs_init() {
     tree_insert(vfs_tree, NULL, root);
 }
 
+vfs_node_t *get_mountpoint_recur(char **path, gentreenode_t *subroot) {
+    bool found = false;
+    char delim = '/';
+    char *currentToken = strsep(path, &delim);
+
+    if(currentToken == NULL || !strcmp(currentToken, "")) {
+        vfs_entry_t *entry = (vfs_entry_t *)subroot->val;
+        return entry->file;
+    }
+
+    foreach(child, subroot->children) {
+        gentreenode_t *tempChild = (gentreenode_t *)child->val;
+        vfs_entry_t *entry = (vfs_entry_t *)tempChild->val;
+        if(strcmp(entry->name, currentToken) == 0) {
+            found = 1;
+            subroot = tempChild;
+            break;
+        }
+    }
+
+    if(!found) {
+        *path = currentToken;
+        return ((vfs_entry_t *)(subroot->val))->file;
+    }
+    return get_mountpoint_recur(path, subroot);
+}
+
+vfs_node_t *get_mountpoint(char **path) {
+    if(strlen(*path) > 1 && (*path)[strlen(*path) - 1] == '/')
+        *(path)[strlen(*path) - 1] = '\0';
+    if(!*path || *(path)[0] != '/') return NULL;
+    if(strlen(*path) == 1) {
+        *path = '\0';
+        vfs_entry_t *entry = (vfs_entry_t *)vfs_tree->root->val;
+        return entry->file;
+    }
+    (*path)++;
+    return get_mountpoint_recur(path, vfs_tree->root);
+}
+
+vfs_node_t *kopen(const char *fileName, unsigned int flags) {
+    char *currentToken = NULL;
+    char *filename = strdup(fileName);
+    char *freeFilename = filename;
+    char *save = strdup(filename);
+    char *originalFilename = filename;
+    char *newStart = NULL;
+    vfs_node_t *nextNode = NULL;
+    vfs_node_t *startPoint = get_mountpoint(&filename);
+    if(!startPoint) return NULL;
+    if(filename)
+        newStart = strstr(save + (filename - originalFilename), filename);
+    while(filename != NULL && ((currentToken = strsep(&newStart, (const char *)"/")) != NULL)) {
+        nextNode = vfs_finddir(startPoint, currentToken);
+        if(!nextNode) return NULL;
+        startPoint = nextNode;
+    }
+    if(!nextNode)
+        nextNode = startPoint;
+    vfs_open(nextNode, flags);
+    kfree(save);
+    kfree(freeFilename);
+    return nextNode;
+}
+
+static void vfs_mount_recur(char *path, gentreenode_t *subroot, vfs_node_t *fsNode) {
+    bool found = false;
+    char *currentToken = strsep(&path, "/");
+
+    if(currentToken == NULL || !strcmp(currentToken, "")) {
+        vfs_entry_t *entry = (vfs_entry_t *)subroot->val;
+        if(entry->file) {
+            printf("Another node already mounted on this path\n");
+            return;
+        }
+        entry->file = fsNode;
+        return;
+    }
+
+    foreach(child, subroot->children) {
+        gentreenode_t *tempChild = (gentreenode_t *)child->val;
+        vfs_entry_t *entry = (vfs_entry_t *)tempChild->val;
+        if(strcmp(entry->name, currentToken) == 0) {
+            found = 1;
+            subroot = tempChild;
+        }
+    }
+
+    if(!found) {
+        vfs_entry_t *entry = (vfs_entry_t *)kcalloc(sizeof(vfs_entry_t *), 1);
+        entry->name = strdup(currentToken);
+        subroot = tree_insert(vfs_tree, subroot, entry);
+    }
+    vfs_mount_recur(path, subroot, fsNode);
+}
+
 void vfs_mount(char *path, vfs_node_t *fsNode) {
     fsNode->refcount = -1;
     if(path[0] == '/' && strlen(path) == 1) {
@@ -76,7 +178,6 @@ void vfs_mount(char *path, vfs_node_t *fsNode) {
         }
         entry->file = fsNode;
         return;
-    } else {
-        //TODO
     }
+    vfs_mount_recur(path + 1, vfs_tree->root, fsNode);
 }
