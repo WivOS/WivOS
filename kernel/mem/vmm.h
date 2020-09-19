@@ -28,6 +28,8 @@ typedef struct pt {
     uint64_t entries[512];
 } pt_t;
 
+extern pt_t *kernel_pml4;
+
 void vmm_init();
 void vmm_map_pages(pt_t *pml4, void *addr, void *phys, size_t size, uint64_t permissions);
 void vmm_unmap_pages(pt_t *pml4, void *addr, size_t size);

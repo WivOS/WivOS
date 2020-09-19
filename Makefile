@@ -1,6 +1,6 @@
 SHELL = /bin/bash
 
-CFLAGS := -Wall -ffreestanding -Wno-unused-variable -Wno-parentheses -Wno-unused-function -fno-pic -Ikernel -O2 -g
+CFLAGS := -Wall -ffreestanding -Wno-unused-variable -Wno-parentheses -Wno-unused-function -fno-pic -Ikernel -Iexternal/lai/include -O2 -g
 LDFLAGS := -nostdlib -no-pie
 
 ifeq ($(DEBUG), 1)
@@ -21,6 +21,7 @@ SRCS += kernel/mem/vmm.c
 SRCS += kernel/mem/mm.c
 SRCS += kernel/cpu/gdt.c
 SRCS += kernel/cpu/idt.c
+SRCS += kernel/acpi/laihost.c
 
 SRCS += kernel/fs/vfs.c
 
@@ -28,22 +29,22 @@ SRCS += kernel/fs/initrd/tar.c
 
 SRCS += kernel/cpu/isr.asm
 
-#CFLAGS += -Ideps/lai/include
-#SRCS += deps/lai/core/error.c
-#SRCS += deps/lai/core/eval.c
-#SRCS += deps/lai/core/exec.c
-#SRCS += deps/lai/core/exec-operand.c
-#SRCS += deps/lai/core/libc.c
-#SRCS += deps/lai/core/ns.c
-#SRCS += deps/lai/core/object.c
-#SRCS += deps/lai/core/opregion.c
-#SRCS += deps/lai/core/os_methods.c
-#SRCS += deps/lai/core/variable.c
-#SRCS += deps/lai/core/vsnprintf.c
-#SRCS += deps/lai/helpers/pci.c
-#SRCS += deps/lai/helpers/pm.c
-#SRCS += deps/lai/helpers/resource.c
-#SRCS += deps/lai/helpers/sci.c
+CFLAGS += -Iexternal/lai/include
+SRCS += external/lai/core/error.c
+SRCS += external/lai/core/eval.c
+SRCS += external/lai/core/exec.c
+SRCS += external/lai/core/exec-operand.c
+SRCS += external/lai/core/libc.c
+SRCS += external/lai/core/ns.c
+SRCS += external/lai/core/object.c
+SRCS += external/lai/core/opregion.c
+SRCS += external/lai/core/os_methods.c
+SRCS += external/lai/core/variable.c
+SRCS += external/lai/core/vsnprintf.c
+SRCS += external/lai/helpers/pci.c
+SRCS += external/lai/helpers/pm.c
+SRCS += external/lai/helpers/resource.c
+SRCS += external/lai/helpers/sci.c
 
 include boot.mk
 
@@ -54,8 +55,8 @@ default: image
 INITRD := initrd
 
 OBJS := $(SRCS:%=$(BUILD_DIR)/%.o)
-DEPS := $(OBJS:%.o=%.d)
--include $(DEPS)
+external := $(OBJS:%.o=%.d)
+-include $(external)
 
 $(BIN_DIR)/wivos.elf: $(OBJS)
 	@mkdir -p $(@D)

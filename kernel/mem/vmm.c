@@ -14,7 +14,7 @@ static pt_offset_t addr_to_offsets(void *addr) {
     return offset;
 }
 
-static pt_t *kernel_pml4;
+pt_t *kernel_pml4;
 
 void vmm_init() {
     kernel_pml4 = create_new_pml4();

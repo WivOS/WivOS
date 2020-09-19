@@ -21,6 +21,18 @@ void *memcpy(void *d, void *s, size_t n) {
     return d;
 }
 
+int memcmp(const void *d, const void *s, size_t n) {
+    register const unsigned char *s1 = (const unsigned char*)d;
+    register const unsigned char *s2 = (const unsigned char*)s;
+
+    while (n-- > 0)
+    {
+      if (*s1++ != *s2++)
+          return s1[-1] < s2[-1] ? -1 : 1;
+    }
+    return 0;
+}
+
 char *strcpy(char *dest, const char *src) {
     size_t i;
 
