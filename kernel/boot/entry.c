@@ -42,7 +42,7 @@ void kentry(stivale2_struct_t *stivale) {
     printf("[Stivale2]\tBootloader brand: %s\n", stivale->bootloader_brand);
     printf("[Stivale2]\tBootloader version: %s\n", stivale->bootloader_version);
     
-    stivale2_module_t *initrdModule;
+    stivale2_module_t *initrdModule = NULL;
 
     printf("[Stivale2]\tTags:\n");
     uint64_t stivaleTags = stivale->tags;

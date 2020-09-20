@@ -5,29 +5,29 @@ gentree_t *vfs_tree;
 // Function wrappers
 size_t vfs_read(vfs_node_t *node, char *buffer, size_t offset, size_t size) {
     if(!node || !node->functions.read) return -1;
-    return node->functions.read((struct vfs_node_t *)node, buffer, offset, size);
+    return node->functions.read((struct vfs_node *)node, buffer, offset, size);
 }
 
 size_t vfs_write(vfs_node_t *node, char *buffer, size_t offset, size_t size) {
     if(!node || !node->functions.read) return -1;
-    return node->functions.write((struct vfs_node_t *)node, buffer, offset, size);
+    return node->functions.write((struct vfs_node *)node, buffer, offset, size);
 }
 
 void vfs_open(vfs_node_t *node, uint32_t flags) {
     if(!node || !node->functions.open) return;
     if(node->refcount >= 0) node->refcount++;
-    node->functions.open((struct vfs_node_t *)node, flags);
+    node->functions.open((struct vfs_node *)node, flags);
 }
 
 void vfs_close(vfs_node_t *node) {
-    if(!node || !node->functions.close) return -1;
+    if(!node || !node->functions.close) return;
     node->refcount--;
-    if(node->refcount == 0) node->functions.close((struct vfs_node_t *)node);
+    if(node->refcount == 0) node->functions.close((struct vfs_node *)node);
 }
 
 vfs_node_t *vfs_finddir(vfs_node_t *node, char *name) {
     if(!node || !(node->flags & FS_DIRECTORY) || !node->functions.finddir) return NULL;
-    return (vfs_node_t *)node->functions.finddir((struct vfs_node_t *)node, name);
+    return (vfs_node_t *)node->functions.finddir((struct vfs_node *)node, name);
 }
 
 // Utils

@@ -13,7 +13,7 @@
 struct vfs_node;
 
 typedef struct vfs_functions {
-    size_t (*read)(struct vfs_node_t *, char *, size_t, size_t);
+    size_t (*read)(struct vfs_node *, char *, size_t, size_t);
     size_t (*write)(struct vfs_node *, char *, size_t, size_t);
     void (*open)(struct vfs_node *, uint32_t flags);
     void (*close)(struct vfs_node *);
