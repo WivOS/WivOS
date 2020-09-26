@@ -18,6 +18,7 @@ pt_t *kernel_pml4;
 
 void vmm_init() {
     kernel_pml4 = create_new_pml4();
+    vmm_map_pages_huge(kernel_pml4, (void *)0x0, NULL, 0x10, 3);
     asm volatile ("mov %%rax, %%cr3" : : "a"(kernel_pml4) : "memory");
 }
 

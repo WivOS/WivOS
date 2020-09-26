@@ -161,6 +161,6 @@ void kentry(stivale2_struct_t *stivale) {
 
     printf("WivOS Booted, halting\n");
     while(1) {
-        asm volatile("hlt");
+        //asm volatile("hlt");
     }
 }

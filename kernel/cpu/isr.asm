@@ -1,3 +1,11 @@
+section .data
+
+%define smp_trampoline_size  smp_trampoline_end - smp_trampoline
+smp_trampoline:              incbin "build/RELEASE/kernel/proc/trampoline.bin"
+smp_trampoline_end:
+
+section .text
+
 %macro ISR_NO_ERR_CODE 1
 global isr%1
 isr%1:
@@ -113,3 +121,27 @@ service_interrupt:
 
 	add rsp, 16
 	iretq
+
+global smp_check_ap_flag
+smp_check_ap_flag:
+    xor rax, rax
+    mov al, byte [0x510]
+    ret
+
+global smp_init_trampoline
+smp_init_trampoline:
+    mov byte [0x510], 0
+    mov qword [0x520], rdi
+    mov qword [0x540], rsi
+    mov qword [0x550], rdx
+    mov qword [0x560], rcx
+    sgdt [0x570]
+    sidt [0x580]
+
+    mov rsi, smp_trampoline
+    mov rdi, 0x1000
+    mov rcx, smp_trampoline_size
+    rep movsb
+
+    mov rax, 0x1
+    ret

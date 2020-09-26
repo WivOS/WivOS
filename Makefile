@@ -75,6 +75,10 @@ $(BUILD_DIR)/%.asm.o: %.asm
 	@mkdir -p $(@D)
 	nasm $< -f elf64 -o $@
 
+$(BUILD_DIR)/%.bin: %.real
+	@mkdir -p $(@D)
+	nasm $< -f bin -o $@
+
 qemu: $(BIN_DIR)/image.hdd
 	powershell.exe -File run.ps1
 
@@ -83,7 +87,7 @@ image: $(BIN_DIR)/image.hdd
 $(BIN_DIR)/initrd.tar: $(INITRD)/*
 	@shopt -s dotglob && pushd $(INITRD) > /dev/null && tar -cf ../$@ * && popd > /dev/null
 
-$(BIN_DIR)/image.hdd: $(BIN_DIR)/wivos.elf $(BIN_DIR)/initrd.tar boot/limine.cfg boot/limine.bin boot/limine-install
+$(BIN_DIR)/image.hdd: $(BUILD_DIR)/kernel/proc/trampoline.bin $(BIN_DIR)/wivos.elf $(BIN_DIR)/initrd.tar boot/limine.cfg boot/limine.bin boot/limine-install
 	@mkdir -p $(@D)
 	@echo "Creating disk"
 	@rm -rf $@

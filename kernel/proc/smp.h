@@ -61,7 +61,7 @@ typedef struct cpu {
 
 #define current_cpu ({ \
     size_t cpuNumber; \
-    asm volatile("mov %0, qword ptr gs:[0]" \
+    asm volatile("movq %%gs:(0), %0" \
                    : "=r"(cpuNumber) : \
                    : "memory", "cc"); \
     (int)cpuNumber; \

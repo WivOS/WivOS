@@ -28,6 +28,8 @@ typedef struct idt_pointer {
     idt_entry_t **entries;
 } __attribute__((packed)) idt_pointer_t;
 
+typedef void (*idt_fn_t)(irq_regs_t *);
+
 void idt_init();
 
 

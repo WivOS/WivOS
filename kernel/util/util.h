@@ -20,3 +20,5 @@ void debug_out_char(char o);
 
 int printf(const char* format, ...);
 int sprintf(char* buffer, const char* format, ...);
+
+void ksleep(size_t ms);

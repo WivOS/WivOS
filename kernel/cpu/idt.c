@@ -26,6 +26,8 @@ static void idt_register_int(size_t vector, void *handler, uint8_t ist, uint8_t 
     idtEntries[vector].zero = 0;
 }
 
+idt_fn_t irq_functions[0x20]; // Random value, to be filled
+
 typedef void (*isr_fn_t)(void);
 
 isr_fn_t handlers[256] = {
@@ -70,6 +72,9 @@ void dispatch_interrupt(irq_regs_t *regs) {
             asm volatile("cli");
             while(1) { asm volatile("hlt"); }
         }
+    } else if((sizeof(irq_functions) / sizeof(idt_fn_t)) > (regs->int_no - 0x20) && irq_functions[(regs->int_no - 0x20)]) {
+        irq_functions[(regs->int_no - 0x20)](regs);
+        lapic_write(0xB0, 0);
     } else {
         printf("[IRQ] Interrupt 0x%x received but not handled\n", regs->int_no);
         //lapic_write(0xB0, 0); -> Enable this to receive more interrupts AKA(EOI)
@@ -80,16 +85,24 @@ void dispatch_interrupt(irq_regs_t *regs) {
 
 extern void int_handler();
 
+static size_t pit_count = 0;
+void pit_handler(irq_regs_t *regs) {
+    pit_count++;
+}
+
+void ksleep(size_t ms) {
+    size_t ticksToWait = pit_count + ms + 1;
+
+    while(pit_count < ticksToWait) {
+        asm volatile("hlt");
+    }
+}
+
 void idt_init() {
     for(int i = 0; i < 256; i++)
         idt_register_int(i, handlers[i], 0, 0x8E);
 
     lidt(&idtPointer);
 
-    //Init pit
-
-    uint16_t x = 1193182 / 1000;
-
-    outb(0x40, (uint8_t)(x & 0xFF));
-    outb(0x40, (uint8_t)((x & 0xFF00) >> 8));
+    irq_functions[0] = (idt_fn_t)pit_handler;
 }
