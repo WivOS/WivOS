@@ -1,6 +1,6 @@
 SHELL = /bin/bash
 
-CFLAGS := -Wall -ffreestanding -Werror -Wno-unused-variable -Wno-unused-function -fno-pic -Ikernel -Iexternal/lai/include -O2 -g
+CFLAGS := -g -Wall -ffreestanding -Werror -Wno-unused-variable -Wno-unused-function -fno-pic -Ikernel -Iexternal/lai/include -O2 -g
 LDFLAGS := -nostdlib -no-pie
 
 ifeq ($(DEBUG), 1)
@@ -23,6 +23,10 @@ SRCS += kernel/cpu/gdt.c
 SRCS += kernel/cpu/idt.c
 SRCS += kernel/cpu/pci.c
 SRCS += kernel/acpi/laihost.c
+SRCS += kernel/acpi/acpi.c
+SRCS += kernel/acpi/apic.c
+
+SRCS += kernel/proc/smp.c
 
 SRCS += kernel/fs/vfs.c
 

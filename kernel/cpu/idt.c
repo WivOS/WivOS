@@ -1,6 +1,8 @@
 #include <cpu/idt.h>
 #include <mem/mm.h>
 #include <util/util.h>
+#include <proc/smp.h>
+#include <acpi/apic.h>
 
 static idt_entry_t idtEntries[256];
 static idt_pointer_t idtPointer = {
@@ -63,7 +65,14 @@ isr_fn_t handlers[256] = {
 
 void dispatch_interrupt(irq_regs_t *regs) {
     if(regs->int_no < 0x20) {
-        printf("[IRQ] Unknown system interrupt 0x%x received\n", regs->int_no);
+        printf("[IRQ] Unknown system interrupt 0x%x received, error: 0x%lx, RIP: 0x%lx\n", regs->int_no, regs->err, regs->rip);
+        if(regs->int_no == 0xD || regs->int_no == 0xE) {
+            asm volatile("cli");
+            while(1) { asm volatile("hlt"); }
+        }
+    } else {
+        printf("[IRQ] Interrupt 0x%x received but not handled\n", regs->int_no);
+        //lapic_write(0xB0, 0); -> Enable this to receive more interrupts AKA(EOI)
     }
 
     return;
@@ -76,4 +85,11 @@ void idt_init() {
         idt_register_int(i, handlers[i], 0, 0x8E);
 
     lidt(&idtPointer);
+
+    //Init pit
+
+    uint16_t x = 1193182 / 1000;
+
+    outb(0x40, (uint8_t)(x & 0xFF));
+    outb(0x40, (uint8_t)((x & 0xFF00) >> 8));
 }

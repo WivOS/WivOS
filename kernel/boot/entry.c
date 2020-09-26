@@ -8,6 +8,9 @@
 #include <fs/vfs.h>
 #include <fs/initrd/tar.h>
 
+#include <acpi/acpi.h>
+#include <proc/smp.h>
+
 uint8_t g_bootstrap_stack[0x1000] = {0};
 
 stivale2_hdr_tag_framebuffer_t g_header_tag_framebuffer = {
@@ -43,6 +46,7 @@ void kentry(stivale2_struct_t *stivale) {
     printf("[Stivale2]\tBootloader version: %s\n", stivale->bootloader_version);
     
     stivale2_module_t *initrdModule = NULL;
+    stivale2_struct_tag_rsdp_t *rsdptag = NULL;
 
     printf("[Stivale2]\tTags:\n");
     uint64_t stivaleTags = stivale->tags;
@@ -107,8 +111,9 @@ void kentry(stivale2_struct_t *stivale) {
                 break;
             case TAG_RSDP:
                 {
-                    stivale2_struct_tag_rsdp_t *rsdptag = (stivale2_struct_tag_rsdp_t *)currTag;
+                    rsdptag = (stivale2_struct_tag_rsdp_t *)((uint64_t)currTag + VIRT_PHYS_BASE);
                     printf("[Stivale2]\t\t\tRSDP address: 0x%lx, TODO\n", rsdptag->rsdp);
+
                 }
                 break;
             case TAG_FIRMWARE:
@@ -129,6 +134,8 @@ void kentry(stivale2_struct_t *stivale) {
     pmm_init(stivale);
     vmm_init();
 
+    acpi_init(rsdptag);
+
     vfs_init();
 
     //Test mounting
@@ -147,6 +154,8 @@ void kentry(stivale2_struct_t *stivale) {
     vfs_read(node, buffer, 0, 999);
     buffer[999] = '\0';
     printf("%s\n", buffer);
+
+    smp_init();
 
     asm volatile("sti");
 
