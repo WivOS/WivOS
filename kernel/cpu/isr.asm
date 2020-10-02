@@ -14,6 +14,18 @@ isr%1:
 	jmp service_interrupt
 %endmacro
 
+%macro ISR_NO_ERR_CODE2 1
+global isr%1
+isr%1:
+	jmp service_interrupt2
+%endmacro
+
+%macro ISR_NO_ERR_CODE3 1
+global isr%1
+isr%1:
+	jmp service_interrupt3
+%endmacro
+
 %macro ISR_ERR_CODE 1
 global isr%1
 isr%1:
@@ -53,16 +65,28 @@ ISR_NO_ERR_CODE 28
 ISR_NO_ERR_CODE 29
 ISR_ERR_CODE 30
 ISR_NO_ERR_CODE 31
+ISR_NO_ERR_CODE3 32
 
 %macro ISR_FILL 0
-	%assign i 32
-	%rep 256 - 32
+	%assign i 33
+	%rep 65 - 33
+		ISR_NO_ERR_CODE i
+		%assign i i+1
+	%endrep
+%endmacro
+
+ISR_NO_ERR_CODE2 65
+
+%macro ISR_FILL2 0
+	%assign i 66
+	%rep 256 - 66
 		ISR_NO_ERR_CODE i
 		%assign i i+1
 	%endrep
 %endmacro
 
 ISR_FILL
+ISR_FILL2
 
 extern dispatch_interrupt
 
@@ -122,6 +146,94 @@ service_interrupt:
 	add rsp, 16
 	iretq
 
+align 16
+global service_interrupt2
+service_interrupt2:
+    cld
+    push rax
+	push rbx
+	push rcx
+	push rdx
+	push rbp
+	push rsi
+	push rdi
+	push r8
+	push r9
+	push r10
+	push r11
+	push r12
+	push r13
+	push r14
+	push r15
+
+	mov rdi, rsp
+    xor rbp, rbp
+
+    extern ipi_resched
+	call ipi_resched
+
+	pop r15
+	pop r14
+	pop r13
+	pop r12
+	pop r11
+	pop r10
+	pop r9
+	pop r8
+	pop rdi
+	pop rsi
+	pop rbp
+	pop rdx
+	pop rcx
+	pop rbx
+	pop rax
+
+	iretq
+
+align 16
+global service_interrupt3
+service_interrupt3:
+    cld
+    push rax
+	push rbx
+	push rcx
+	push rdx
+	push rbp
+	push rsi
+	push rdi
+	push r8
+	push r9
+	push r10
+	push r11
+	push r12
+	push r13
+	push r14
+	push r15
+
+	mov rdi, rsp
+    xor rbp, rbp
+
+    extern pit_handler
+	call pit_handler
+
+	pop r15
+	pop r14
+	pop r13
+	pop r12
+	pop r11
+	pop r10
+	pop r9
+	pop r8
+	pop rdi
+	pop rsi
+	pop rbp
+	pop rdx
+	pop rcx
+	pop rbx
+	pop rax
+
+	iretq
+
 global smp_check_ap_flag
 smp_check_ap_flag:
     xor rax, rax
@@ -129,6 +241,7 @@ smp_check_ap_flag:
     ret
 
 global smp_init_trampoline
+extern gdt_load_tss
 smp_init_trampoline:
     mov byte [0x510], 0
     mov qword [0x520], rdi
@@ -143,5 +256,56 @@ smp_init_trampoline:
     mov rcx, smp_trampoline_size
     rep movsb
 
+    mov rdi, rsi
+    call gdt_load_tss
+
     mov rax, 0x1
     ret
+
+global smp_init_cpu0_local
+smp_init_cpu0_local:
+    mov ax, 0x1b
+    mov fs, ax
+    mov gs, ax
+    mov rcx, 0xc0000101
+    mov eax, edi
+    shr rdi, 32
+    mov edx, edi
+    wrmsr
+
+    mov rdi, rsi
+    call gdt_load_tss
+
+    mov ax, 0x28
+    ltr ax
+
+    ret
+
+global task_return_context
+task_return_context:
+    mov rsp, rdi
+
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop r11
+    pop r10
+    pop r9
+    pop r8
+    pop rdi
+    pop rsi
+    pop rbp
+    pop rdx
+    pop rcx
+    pop rbx
+
+    mov rax, qword [rsp+32+8]
+    mov ds, ax
+    mov es, ax
+
+    sti
+
+    pop rax
+
+    iretq

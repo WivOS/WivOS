@@ -71,7 +71,7 @@ uint32_t lapic_read(uint32_t reg) {
     return *((uint32_t *)((uint64_t)lapic_base + reg));
 }
 
-static void lapic_enable() {
+void lapic_enable() {
     lapic_write(0xF0, lapic_read(0xF0) | 0x1FF);
 }
 

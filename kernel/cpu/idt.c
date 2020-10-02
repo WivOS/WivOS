@@ -26,7 +26,7 @@ static void idt_register_int(size_t vector, void *handler, uint8_t ist, uint8_t 
     idtEntries[vector].zero = 0;
 }
 
-idt_fn_t irq_functions[0x20]; // Random value, to be filled
+idt_fn_t irq_functions[0x30]; // Random value, to be filled
 
 typedef void (*isr_fn_t)(void);
 
@@ -72,9 +72,12 @@ void dispatch_interrupt(irq_regs_t *regs) {
             asm volatile("cli");
             while(1) { asm volatile("hlt"); }
         }
-    } else if((sizeof(irq_functions) / sizeof(idt_fn_t)) > (regs->int_no - 0x20) && irq_functions[(regs->int_no - 0x20)]) {
-        irq_functions[(regs->int_no - 0x20)](regs);
+    } else if(regs->int_no == 0x41) {
         lapic_write(0xB0, 0);
+        irq_functions[0x21](regs);
+    } else if((sizeof(irq_functions) / sizeof(idt_fn_t)) > (regs->int_no - 0x20) && irq_functions[(regs->int_no - 0x20)]) {
+        lapic_write(0xB0, 0);
+        irq_functions[(regs->int_no - 0x20)](regs); // handle this manually
     } else {
         printf("[IRQ] Interrupt 0x%x received but not handled\n", regs->int_no);
         //lapic_write(0xB0, 0); -> Enable this to receive more interrupts AKA(EOI)
@@ -86,8 +89,34 @@ void dispatch_interrupt(irq_regs_t *regs) {
 extern void int_handler();
 
 static size_t pit_count = 0;
-void pit_handler(irq_regs_t *regs) {
+extern int sched_ready;
+extern size_t processors_count;
+void pit_handler(thread_regs_t *regs) {
     pit_count++;
+
+    if(pit_count % 10) {
+        lapic_write(0xB0, 0);
+        return;
+    }
+
+    if(!sched_ready) {
+        lapic_write(0xB0, 0);
+        return;
+    }
+
+    lapic_write(0xB0, 0);
+
+    for(int i = 1; i < processors_count; i++) {
+        lapic_write(0x310, ((uint32_t)cpuLocals[i].lapicId) << 24);
+        lapic_write(0x300, 0x41);
+    }
+
+    schedule(regs);
+}
+
+void ipi_resched(thread_regs_t *regs) {
+    lapic_write(0xB0, 0);
+    schedule(regs);
 }
 
 void ksleep(size_t ms) {
@@ -97,6 +126,8 @@ void ksleep(size_t ms) {
         asm volatile("hlt");
     }
 }
+
+void service_interrupt2();
 
 void idt_init() {
     for(int i = 0; i < 256; i++)

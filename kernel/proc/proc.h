@@ -9,7 +9,6 @@ typedef size_t pid_t;
 typedef size_t tid_t;
 
 typedef struct thread_regs {
-	uint64_t ds;
 	uint64_t r15, r14, r13, r12, r11, r10, r9, r8,
 			 rdi, rsi, rbp, rdx, rcx, rbx, rax;
 	uint64_t rip, cs, rflags;
@@ -17,9 +16,13 @@ typedef struct thread_regs {
 } thread_regs_t;
 
 typedef struct thread {
-    tid_t tid;
-    void *stack_addr;
     thread_regs_t context_regs;
+    tid_t tid;
+    tid_t schedTid;
+    pid_t pid;
+    void *kstack_addr;
+    size_t cpuNumber;
+    spinlock_t lock;
 } thread_t;
 
 typedef struct process {
@@ -30,3 +33,6 @@ typedef struct process {
 } process_t;
 
 void scheduler_init();
+
+void schedule(thread_regs_t *regs);
+void thread_create(pid_t pid, void *function);

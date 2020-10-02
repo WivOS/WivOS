@@ -54,8 +54,10 @@ typedef struct madt_lapic {
 
 typedef struct cpu {
     size_t currentCpu;
+    size_t kernelStack;
     tid_t currentThread;
     pid_t currentProcess;
+    size_t currentActiveThread;
     uint8_t lapicId;
 } cpu_t;
 

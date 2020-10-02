@@ -27,6 +27,7 @@ SRCS += kernel/acpi/acpi.c
 SRCS += kernel/acpi/apic.c
 
 SRCS += kernel/proc/smp.c
+SRCS += kernel/proc/proc.c
 
 SRCS += kernel/fs/vfs.c
 

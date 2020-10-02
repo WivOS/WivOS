@@ -4,7 +4,7 @@ void lgdt(gdt_pointer_t* gdt) {
     asm volatile ( "lgdt %0" : : "m" (*gdt));
 }
 
-static gdt_entry_t gdtEntries[5] = {
+static gdt_entry_t gdtEntries[7] = {
     { //null
         .limit = 0x0000,
         .base_low = 0x0000,
@@ -45,10 +45,26 @@ static gdt_entry_t gdtEntries[5] = {
         .access = 0b11111010,
         .granularity = 0b00100000
     },
+    { //tss first
+        .limit = 104,
+        .base_low = 0x0000,
+        .base_mid = 0x00,
+        .base_hi = 0x00,
+        .access = 0b10001001,
+        .granularity = 0b00100000
+    },
+    { //tss second zero
+        .limit = 0x0,
+        .base_low = 0x0000,
+        .base_mid = 0x00,
+        .base_hi = 0x00,
+        .access = 0x0,
+        .granularity = 0x0
+    },
 };
 
 static gdt_pointer_t gdtPointer = {
-    .size = sizeof(gdt_entry_t) * 5 - 1,
+    .size = sizeof(gdt_entry_t) * 7 - 1,
     .entries = (gdt_entry_t **)&gdtEntries
 };
 
@@ -71,4 +87,15 @@ void gdt_init() {
         "movw %%ax, %%fs\n"
         "movw %%ax, %%gs\n"
     ::: "memory", "rax");
+}
+
+void gdt_load_tss(size_t addr) {
+    gdtEntries[5].base_low = (uint16_t)addr;
+    gdtEntries[5].base_mid = (uint8_t)(addr >> 16);
+    gdtEntries[5].access = 0b10001001;
+    gdtEntries[5].granularity = 0;
+    gdtEntries[5].base_hi = (uint8_t)(addr >> 24);
+    uint32_t *entry = (uint32_t *)(&gdtEntries[6]);
+    entry[0] = (uint32_t)(addr >> 32);
+    entry[1] = 0;
 }

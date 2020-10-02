@@ -29,14 +29,9 @@ stivale2_header_t header = {
     .tags = (uint64_t)&g_header_tag_framebuffer
 };
 
-static void testOpen() {
-    return;
-}
+void kentry_threaded();
 
-static size_t testRead(vfs_node_t *node, char *buffer, size_t offset, size_t size) {
-    printf("Drive readed, Offset: 0x%lx Size: 0x%lx\n", offset, size);
-    return 1;
-}
+static stivale2_module_t *initrdModule = NULL;
 
 void kentry(stivale2_struct_t *stivale) {
     printf("Initializing WivOS\n");
@@ -45,7 +40,6 @@ void kentry(stivale2_struct_t *stivale) {
     printf("[Stivale2]\tBootloader brand: %s\n", stivale->bootloader_brand);
     printf("[Stivale2]\tBootloader version: %s\n", stivale->bootloader_version);
     
-    stivale2_module_t *initrdModule = NULL;
     stivale2_struct_tag_rsdp_t *rsdptag = NULL;
 
     printf("[Stivale2]\tTags:\n");
@@ -136,14 +130,23 @@ void kentry(stivale2_struct_t *stivale) {
 
     acpi_init(rsdptag);
 
-    vfs_init();
+    smp_init();
 
-    //Test mounting
-    vfs_node_t *rootNode = (vfs_node_t *)kcalloc(sizeof(vfs_node_t *), 1);
-    strcpy(rootNode->name, "VFS");
-    rootNode->functions.open = testOpen;
-    rootNode->functions.read = testRead;
-    vfs_mount("/dev/", rootNode);
+    scheduler_init();
+    thread_create(0, kentry_threaded);
+
+    printf("WivOS Booted, scheduling\n");
+
+    asm volatile("sti");
+    while(1) {
+        //asm volatile("hlt");
+    }
+}
+
+void kentry_threaded() {
+    printf("Threading started :D\n");
+
+    vfs_init();
 
     parseTarInitrd((void *)(initrdModule->begin + VIRT_PHYS_BASE));
 
@@ -155,12 +158,5 @@ void kentry(stivale2_struct_t *stivale) {
     buffer[999] = '\0';
     printf("%s\n", buffer);
 
-    smp_init();
-
-    asm volatile("sti");
-
-    printf("WivOS Booted, halting\n");
-    while(1) {
-        //asm volatile("hlt");
-    }
+    while(1);
 }

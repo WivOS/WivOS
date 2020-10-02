@@ -25,13 +25,42 @@
     ret; \
 })
 
+#define spinlock_lock(LOCK) ({ \
+    asm volatile ( \
+        "1: " \
+        "lock btrw $0, %0;" \
+        "jc 2f;" \
+        "pause;" \
+        "jmp 1b;" \
+        "2: " \
+        : "+m" ((LOCK)->lock) \
+        : \
+        : "memory", "cc" \
+    ); \
+})
+
+#define spinlock_unlock(LOCK) ({ \
+    asm volatile ( \
+        "lock btsw $0, %0;" \
+        : "+m" ((LOCK)->lock) \
+        : \
+        : "memory", "cc" \
+    ); \
+})
+
+#define spinlock_try_lock(LOCK) ({ \
+    int ret; \
+    asm volatile ( \
+        "lock btrw $0, %0;" \
+        : "+m" ((LOCK)->lock), "=@ccc" (ret) \
+        : \
+        : "memory" \
+    ); \
+    ret; \
+})
+
 typedef struct lock {
-    atomic_size_t lock;
-    atomic_size_t next_lock;
+    int lock;
 } spinlock_t;
 
-#define INIT_LOCK() ((spinlock_t){0})
-
-void spinlock_lock(spinlock_t* lock);
-bool spinlock_try_lock(spinlock_t* lock);
-void spinlock_unlock(spinlock_t* lock);
+#define INIT_LOCK() ((spinlock_t){1})
