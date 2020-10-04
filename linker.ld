@@ -23,7 +23,7 @@ SECTIONS
     {
         *(.data*)
         PROVIDE(kernel_symbols_start = .);
-	    PROVIDE(kernel_symbols_end = .);
+        PROVIDE(kernel_symbols_end = .);
     }
 
     .bss ALIGN(4K) :
