@@ -61,3 +61,37 @@ void tree2list(gentree_t *tree, list_t *list);
 
 void tree2array_recur(gentreenode_t *subroot, void **array, size_t *size);
 void tree2array(gentree_t *tree, void **array, size_t *size);
+
+typedef uint64_t (*hashmap_hash_t) (void *key);
+typedef uint64_t (*hashmap_comp_t) (void *a, void *b);
+typedef void (*hashmap_free_t) (void *);
+typedef void *(*hashmap_dupe_t) (void *);
+
+typedef struct hashmap_entry {
+	char * key;
+	void * value;
+	struct hashmap_entry *next;
+} hashmap_entry_t;
+
+typedef struct hashmap {
+	hashmap_hash_t hash_func;
+	hashmap_comp_t hash_comp;
+	hashmap_dupe_t hash_key_dup;
+	hashmap_free_t hash_key_free;
+	hashmap_free_t hash_val_free;
+	size_t         size;
+	hashmap_entry_t **entries;
+} hashmap_t;
+
+hashmap_t * hashmap_create(size_t size);
+void * hashmap_set(hashmap_t * map, char * key, void * value);
+void * hashmap_get(hashmap_t * map, char * key);
+void * hashmap_remove(hashmap_t * map, char * key);
+size_t hashmap_has(hashmap_t * map, char * key);
+list_t * hashmap_keys(hashmap_t * map);
+list_t * hashmap_values(hashmap_t * map);
+void hashmap_free(hashmap_t * map);
+
+uint64_t hashmap_string_hash(void * key);
+size_t hashmap_string_comp(void * a, void * b);
+void * hashmap_string_dupe(void * key);

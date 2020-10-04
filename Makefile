@@ -33,6 +33,8 @@ SRCS += kernel/fs/vfs.c
 
 SRCS += kernel/fs/initrd/tar.c
 
+SRCS += kernel/modules/modules.c
+
 SRCS += kernel/cpu/isr.asm
 
 CFLAGS += -Iexternal/lai/include
@@ -64,9 +66,15 @@ OBJS := $(SRCS:%=$(BUILD_DIR)/%.o)
 external := $(OBJS:%.o=%.d)
 -include $(external)
 
-$(BIN_DIR)/wivos.elf: $(OBJS)
+$(BIN_DIR)/wivos.elf: $(OBJS) $(BUILD_DIR)/kernel/symbols.o
 	@mkdir -p $(@D)
 	ld $(LDFLAGS) -o $@ $^
+
+$(BUILD_DIR)/kernel/symbols.o: $(OBJS) generate_symbols.py
+	@mkdir -p $(@D)
+	ld $(LDFLAGS) -o $(BUILD_DIR)/wivost.elf $(OBJS)
+	nm $(BUILD_DIR)/wivost.elf -g | python2 generate_symbols.py > kernel/symbols.s
+	nasm kernel/symbols.s -f elf64 -o $@
 
 $(BUILD_DIR)/%.c.o: %.c
 	@mkdir -p $(@D)

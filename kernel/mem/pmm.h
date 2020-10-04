@@ -1,6 +1,7 @@
 #pragma once
 
 #define VIRT_PHYS_BASE 0xFFFF800000000000UL
+#define VIRT_KRNL_BASE 0xFFFFFFFF80000000UL
 #define PAGE_SIZE 0x1000
 
 #include <boot/stivale2.h>

@@ -19,3 +19,5 @@ char *strsep(char **stringp, const char *delim);
 
 list_t *strtoklist(char *s, char *delim, size_t *nTokens);
 char *list2str(list_t *list, const char* delim);
+
+uint8_t startswith(const char * str, const char * accept);

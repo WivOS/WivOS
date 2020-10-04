@@ -3,14 +3,24 @@
 gentree_t *vfs_tree;
 
 // Function wrappers
-size_t vfs_read(vfs_node_t *node, char *buffer, size_t offset, size_t size) {
+size_t vfs_read(vfs_node_t *node, char *buffer, size_t size) {
     if(!node || !node->functions.read) return -1;
-    return node->functions.read((struct vfs_node *)node, buffer, offset, size);
+    return node->functions.read((struct vfs_node *)node, buffer, size);
 }
 
-size_t vfs_write(vfs_node_t *node, char *buffer, size_t offset, size_t size) {
+size_t vfs_write(vfs_node_t *node, char *buffer, size_t size) {
     if(!node || !node->functions.read) return -1;
-    return node->functions.write((struct vfs_node *)node, buffer, offset, size);
+    return node->functions.write((struct vfs_node *)node, buffer, size);
+}
+
+size_t vfs_fstat(vfs_node_t *node, stat_t *stat) {
+    if(!node || !node->functions.fstat || !stat) return -1;
+    return node->functions.fstat((struct vfs_node *)node, stat);
+}
+
+size_t vfs_lseek(vfs_node_t *node, off_t offset, int type) {
+    if(!node || !node->functions.lseek) return -1;
+    return node->functions.lseek((struct vfs_node *)node, offset, type);
 }
 
 void vfs_open(vfs_node_t *node, uint32_t flags) {

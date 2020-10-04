@@ -146,7 +146,7 @@ void list_destroy(list_t *list) {
     while(node != NULL) {
         lnode_t *nodeSave = node;
         node = node->next;
-        kfree((void *)node);
+        kfree((void *)nodeSave);
     }
     kfree((void *)list);
 }
@@ -233,4 +233,178 @@ void tree2array_recur(gentreenode_t *subroot, void **array, size_t *size) {
 
 void tree2array(gentree_t *tree, void **array, size_t *size) {
     tree2array_recur(tree->root, array, size);
+}
+
+uint64_t hashmap_string_hash(void *_key) {
+	uint64_t hash = 0;
+	char * key = (char *)_key;
+	int c;
+	while ((c = *key++)) {
+		hash = c + (hash << 6) + (hash << 16) - hash;
+	}
+	return hash;
+}
+
+size_t hashmap_string_comp(void *a, void *b) {
+	return !strcmp(a,b);
+}
+
+void * hashmap_string_dupe(void * key) {
+	return strdup(key);
+}
+
+hashmap_t * hashmap_create(size_t size) {
+	hashmap_t * map = kmalloc(sizeof(hashmap_t));
+
+	map->hash_func     = &hashmap_string_hash;
+	map->hash_comp     = &hashmap_string_comp;
+	map->hash_key_dup  = &hashmap_string_dupe;
+	map->hash_key_free = &kfree;
+	map->hash_val_free = &kfree;
+
+	map->size = size;
+	map->entries = kmalloc(sizeof(hashmap_entry_t *) * size);
+	memset(map->entries, 0x00, sizeof(hashmap_entry_t *) * size);
+
+	return map;
+}
+
+void * hashmap_set(hashmap_t * map, char * key, void * value) {
+	uint64_t hash = map->hash_func(key) % map->size;
+
+	hashmap_entry_t * x = map->entries[hash];
+	if (!x) {
+		hashmap_entry_t * e = kmalloc(sizeof(hashmap_entry_t));
+		e->key   = map->hash_key_dup(key);
+		e->value = value;
+		e->next = NULL;
+		map->entries[hash] = e;
+		return NULL;
+	} else {
+		hashmap_entry_t * p = NULL;
+		do {
+			if (map->hash_comp(x->key, key)) {
+				void * out = x->value;
+				x->value = value;
+				return out;
+			} else {
+				p = x;
+				x = x->next;
+			}
+		} while (x);
+		hashmap_entry_t * e = kmalloc(sizeof(hashmap_entry_t));
+		e->key   = map->hash_key_dup(key);
+		e->value = value;
+		e->next = NULL;
+
+		p->next = e;
+		return NULL;
+	}
+}
+
+void * hashmap_get(hashmap_t * map, char * key) {
+	unsigned int hash = map->hash_func(key) % map->size;
+
+	hashmap_entry_t * x = map->entries[hash];
+	if (!x) {
+		return NULL;
+	} else {
+		do {
+			if (map->hash_comp(x->key, key)) {
+				return x->value;
+			}
+			x = x->next;
+		} while (x);
+		return NULL;
+	}
+}
+
+void * hashmap_remove(hashmap_t * map, char * key) {
+	uint64_t hash = map->hash_func(key) % map->size;
+
+	hashmap_entry_t * x = map->entries[hash];
+	if (!x) {
+		return NULL;
+	} else {
+		if (map->hash_comp(x->key, key)) {
+			void * out = x->value;
+			map->entries[hash] = x->next;
+			map->hash_key_free(x->key);
+			map->hash_val_free(x);
+			return out;
+		} else {
+			hashmap_entry_t * p = x;
+			x = x->next;
+			do {
+				if (map->hash_comp(x->key, key)) {
+					void * out = x->value;
+					p->next = x->next;
+					map->hash_key_free(x->key);
+					map->hash_val_free(x);
+					return out;
+				}
+				p = x;
+				x = x->next;
+			} while (x);
+		}
+		return NULL;
+	}
+}
+
+size_t hashmap_has(hashmap_t * map, char * key) {
+	uint64_t hash = map->hash_func(key) % map->size;
+
+	hashmap_entry_t * x = map->entries[hash];
+	if (!x) {
+		return 0;
+	} else {
+		do {
+			if (map->hash_comp(x->key, key)) {
+				return 1;
+			}
+			x = x->next;
+		} while (x);
+		return 0;
+	}
+}
+
+list_t * hashmap_keys(hashmap_t * map) {
+	list_t * l = list_create();
+
+	for (unsigned int i = 0; i < map->size; ++i) {
+		hashmap_entry_t * x = map->entries[i];
+		while (x) {
+			list_insert_back(l, x->key);
+			x = x->next;
+		}
+	}
+
+	return l;
+}
+
+list_t * hashmap_values(hashmap_t * map) {
+	list_t * l = list_create();
+
+	for (unsigned int i = 0; i < map->size; ++i) {
+		hashmap_entry_t * x = map->entries[i];
+		while (x) {
+			list_insert_back(l, x->value);
+			x = x->next;
+		}
+	}
+
+	return l;
+}
+
+void hashmap_free(hashmap_t * map) {
+	for (size_t i = 0; i < map->size; ++i) {
+		hashmap_entry_t * x = map->entries[i], * p;
+		while (x) {
+			p = x;
+			x = x->next;
+			map->hash_key_free(p->key);
+			map->hash_val_free(p);
+		}
+	}
+	kfree(map->entries);
 }

@@ -70,6 +70,11 @@ void dispatch_interrupt(irq_regs_t *regs) {
         printf("[IRQ] Unknown system interrupt 0x%x received, error: 0x%lx, RIP: 0x%lx\n", regs->int_no, regs->err, regs->rip);
         if(regs->int_no == 0xD || regs->int_no == 0xE) {
             asm volatile("cli");
+            uint64_t cr2;
+            asm volatile("mov %%cr2, %%rax\n\t"
+                         "mov %%rax, %0"
+                         : "=m"(cr2) : : "%rax");
+            printf("CR2: %lx\n", cr2);
             while(1) { asm volatile("hlt"); }
         }
     } else if(regs->int_no == 0x41) {

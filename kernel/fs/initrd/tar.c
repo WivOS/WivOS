@@ -22,21 +22,88 @@ void initrd_open() {
     return;
 }
 
-size_t initrd_write(vfs_node_t *file, char *buffer, size_t offset, size_t size) {
+size_t initrd_write(vfs_node_t *file, char *buffer, size_t size) {
     return -1;
 }
 
-size_t initrd_read(vfs_node_t *file, char *buffer, size_t offset, size_t size) {
+size_t initrd_read(vfs_node_t *file, char *buffer, size_t size) {
     size_t *index = file->device;
     tar_header_t *header = headers[*index];
     size_t tarSize = getTarSize(header->size);
-    if((size + offset) <= tarSize) {
-        memcpy(buffer, (void *)((uint64_t)header + 512 + offset), size);
+    if((size + file->offset) <= tarSize) {
+        memcpy(buffer, (void *)((uint64_t)header + 512 + file->offset), size);
+        file->offset += size;
         return size;
     } else {
-        memcpy(buffer, (void *)((uint64_t)header + 512 + offset), (tarSize - offset));
-        return (tarSize - offset);
+        memcpy(buffer, (void *)((uint64_t)header + 512 + file->offset), (tarSize - file->offset));
+        file->offset = tarSize;
+        return (tarSize - file->offset);
     }
+}
+
+size_t initrd_fstat(vfs_node_t *file, stat_t *statPtr) {
+    size_t *index = file->device;
+    tar_header_t *header = headers[*index];
+    size_t tarSize = getTarSize(header->size);
+
+    statPtr->st_dev = 1;
+    if(file->flags & FS_DIRECTORY) {
+        statPtr->st_ino = 1;
+    } else {
+        statPtr->st_ino = (ino_t)(*index);
+    }
+    statPtr->st_nlink = 1;
+    statPtr->st_uid = 0;
+    statPtr->st_gid = 0;
+    statPtr->st_rdev = 0;
+    statPtr->st_size = tarSize;
+    statPtr->st_blksize = 512;
+    statPtr->st_blocks = (tarSize + 512 - 1) / 512;
+    statPtr->st_atim.tv_sec = 0;
+    statPtr->st_atim.tv_nsec = 0;
+    statPtr->st_mtim.tv_sec = 0;
+    statPtr->st_mtim.tv_nsec = 0;
+    statPtr->st_ctim.tv_sec = 0;
+    statPtr->st_ctim.tv_nsec = 0;
+    statPtr->st_mode = 0;
+    if(file->flags & FS_DIRECTORY) {
+        statPtr->st_mode |= 0x04000;
+    } else {
+        statPtr->st_mode |= 0x06000;
+    }
+
+    return 0;
+}
+
+size_t initrd_lseek(vfs_node_t *file, off_t offset, int type) {
+    size_t *index = file->device;
+    tar_header_t *header = headers[*index];
+    size_t tarSize = getTarSize(header->size);
+
+    if(file->flags & FS_DIRECTORY) {
+        return -1;
+    }
+
+    switch(type) {
+        case SEEK_SET:
+            if(offset >= tarSize || offset < 0) goto def;
+            file->offset = offset;
+            break;
+        case SEEK_END:
+            if(tarSize + offset > tarSize || tarSize + offset < 0) goto def;
+            file->offset = tarSize + offset;
+            break;
+        case SEEK_CUR:
+            if(file->offset + offset >= tarSize || file->offset + offset < 0) goto def;
+            file->offset += offset;
+            break;
+        default:
+        def:
+            return -1;
+    }
+
+    size_t ret = file->offset;
+    return ret;
 }
 
 vfs_node_t *initrd_finddir(vfs_node_t *parent, char *name) {
@@ -54,6 +121,8 @@ vfs_node_t *initrd_finddir(vfs_node_t *parent, char *name) {
             ret->functions.open = initrd_open;
             ret->functions.write = initrd_write;
             ret->functions.read = initrd_read;
+            ret->functions.fstat = initrd_fstat;
+            ret->functions.lseek = initrd_lseek;
 
             return ret;
         }
@@ -98,6 +167,8 @@ size_t parseTarInitrd(void *initrd) {
     rootNode->functions.read = initrd_read;
     rootNode->functions.write = initrd_write;
     rootNode->functions.finddir = initrd_finddir;
+    rootNode->functions.fstat = initrd_fstat;
+    rootNode->functions.lseek = initrd_lseek;
     rootNode->flags |= FS_DIRECTORY;
     vfs_mount("/", rootNode);
 

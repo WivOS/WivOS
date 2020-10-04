@@ -209,3 +209,13 @@ char *list2str(list_t *list, const char* delim) {
     }
     return ret;
 }
+
+uint8_t startswith(const char * str, const char * accept) {
+	size_t s = strlen(accept);
+	for (size_t i = 0; i < s; ++i) {
+		if (*str != *accept) return 0;
+		str++;
+		accept++;
+	}
+	return 1;
+}

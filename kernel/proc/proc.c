@@ -126,7 +126,7 @@ void schedule(thread_regs_t *regs) {
         current_thread->context_regs = *regs;
         processes[currentProcess]->threads[currentThread]->cpuNumber = -1;
         //TODO: FPU and add spinlocks to the threads
-        spinlock_unlock(&processes[currentProcess]->threads[currentThread]->lock);
+        spinlock_unlock(&current_thread->lock);
     }
 skip_invalid_thread_context_save:
     (void)0;

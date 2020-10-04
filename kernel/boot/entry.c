@@ -7,6 +7,7 @@
 #include <cpu/idt.h>
 #include <fs/vfs.h>
 #include <fs/initrd/tar.h>
+#include <modules/modules.h>
 
 #include <acpi/acpi.h>
 #include <proc/smp.h>
@@ -143,6 +144,13 @@ void kentry(stivale2_struct_t *stivale) {
     }
 }
 
+char * special_thing = "Hola :D\n";
+
+static void print(char *str) {
+    //printf("%lx %lx\n", (size_t)str, (size_t)special_thing);
+    printf(str);
+}
+
 void kentry_threaded() {
     printf("Threading started :D\n");
 
@@ -152,11 +160,9 @@ void kentry_threaded() {
 
     print_vfstree();
 
-    vfs_node_t *node = kopen("/hola.txt", 0);
-    char buffer[1000];
-    vfs_read(node, buffer, 0, 999);
-    buffer[999] = '\0';
-    printf("%s\n", buffer);
+    modules_init();
+    module_load("/test.wko");
+    module_load("/test2.wko");
 
     while(1);
 }

@@ -11,6 +11,7 @@ SECTIONS
     .text ALIGN(4K) :
     {
         *(.text*)
+        *(.symbols*)
     }
 
     .rodata ALIGN(4K) :
@@ -21,6 +22,8 @@ SECTIONS
     .data ALIGN(4K) :
     {
         *(.data*)
+        PROVIDE(kernel_symbols_start = .);
+		PROVIDE(kernel_symbols_end = .);
     }
 
     .bss ALIGN(4K) :
