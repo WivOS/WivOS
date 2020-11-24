@@ -46,6 +46,18 @@ kernel_symbols_start:
     dq debug_out_char
     db 'debug_out_char', 0
 
+    extern devfs_finddir
+    dq devfs_finddir
+    db 'devfs_finddir', 0
+
+    extern devfs_mount
+    dq devfs_mount
+    db 'devfs_mount', 0
+
+    extern devfs_tree
+    dq devfs_tree
+    db 'devfs_tree', 0
+
     extern dispatch_interrupt
     dq dispatch_interrupt
     db 'dispatch_interrupt', 0
@@ -57,6 +69,14 @@ kernel_symbols_start:
     extern displayString
     dq displayString
     db 'displayString', 0
+
+    extern end_test_function
+    dq end_test_function
+    db 'end_test_function', 0
+
+    extern fontBitmap
+    dq fontBitmap
+    db 'fontBitmap', 0
 
     extern g_bootstrap_stack
     dq g_bootstrap_stack
@@ -149,6 +169,10 @@ kernel_symbols_start:
     extern inb
     dq inb
     db 'inb', 0
+
+    extern initDevFS
+    dq initDevFS
+    db 'initDevFS', 0
 
     extern initrd_finddir
     dq initrd_finddir
@@ -1810,6 +1834,10 @@ kernel_symbols_start:
     dq laihost_unmap
     db 'laihost_unmap', 0
 
+    extern lapic_connect_gsi_to_vec
+    dq lapic_connect_gsi_to_vec
+    db 'lapic_connect_gsi_to_vec', 0
+
     extern lapic_enable
     dq lapic_enable
     db 'lapic_enable', 0
@@ -1958,9 +1986,17 @@ kernel_symbols_start:
     dq parseTarInitrd
     db 'parseTarInitrd', 0
 
+    extern pci_get_device_by_vendor
+    dq pci_get_device_by_vendor
+    db 'pci_get_device_by_vendor', 0
+
     extern pci_init
     dq pci_init
     db 'pci_init', 0
+
+    extern pci_read_bar
+    dq pci_read_bar
+    db 'pci_read_bar', 0
 
     extern pci_read_byte
     dq pci_read_byte
@@ -1973,6 +2009,10 @@ kernel_symbols_start:
     extern pci_read_word
     dq pci_read_word
     db 'pci_read_word', 0
+
+    extern pci_register_msi
+    dq pci_register_msi
+    db 'pci_register_msi', 0
 
     extern pci_write_byte
     dq pci_write_byte
@@ -2034,6 +2074,10 @@ kernel_symbols_start:
     dq printf
     db 'printf', 0
 
+    extern proc_create
+    dq proc_create
+    db 'proc_create', 0
+
     extern processors
     dq processors
     db 'processors', 0
@@ -2041,6 +2085,10 @@ kernel_symbols_start:
     extern processors_count
     dq processors_count
     db 'processors_count', 0
+
+    extern render_string
+    dq render_string
+    db 'render_string', 0
 
     extern sched_ready
     dq sched_ready
@@ -2134,6 +2182,10 @@ kernel_symbols_start:
     dq task_return_context
     db 'task_return_context', 0
 
+    extern test_function
+    dq test_function
+    db 'test_function', 0
+
     extern thread_create
     dq thread_create
     db 'thread_create', 0
@@ -2197,6 +2249,10 @@ kernel_symbols_start:
     extern vfs_init
     dq vfs_init
     db 'vfs_init', 0
+
+    extern vfs_ioctl
+    dq vfs_ioctl
+    db 'vfs_ioctl', 0
 
     extern vfs_lseek
     dq vfs_lseek

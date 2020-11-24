@@ -26,7 +26,7 @@ static void idt_register_int(size_t vector, void *handler, uint8_t ist, uint8_t 
     idtEntries[vector].zero = 0;
 }
 
-idt_fn_t irq_functions[0x30]; // Random value, to be filled
+idt_fn_t irq_functions[0x40]; // Random value, to be filled
 
 typedef void (*isr_fn_t)(void);
 
@@ -81,8 +81,8 @@ void dispatch_interrupt(irq_regs_t *regs) {
         lapic_write(0xB0, 0);
         irq_functions[0x21](regs);
     } else if((sizeof(irq_functions) / sizeof(idt_fn_t)) > (regs->int_no - 0x20) && irq_functions[(regs->int_no - 0x20)]) {
-        lapic_write(0xB0, 0);
         irq_functions[(regs->int_no - 0x20)](regs); // handle this manually
+        lapic_write(0xB0, 0);
     } else {
         printf("[IRQ] Interrupt 0x%x received but not handled\n", regs->int_no);
         //lapic_write(0xB0, 0); -> Enable this to receive more interrupts AKA(EOI)
@@ -137,6 +137,8 @@ void service_interrupt2();
 void idt_init() {
     for(int i = 0; i < 256; i++)
         idt_register_int(i, handlers[i], 0, 0x8E);
+
+    idt_register_int(3, handlers[0x3], 0, 0xEE);
 
     lidt(&idtPointer);
 

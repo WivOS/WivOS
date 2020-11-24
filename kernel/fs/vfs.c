@@ -40,6 +40,11 @@ vfs_node_t *vfs_finddir(vfs_node_t *node, char *name) {
     return (vfs_node_t *)node->functions.finddir((struct vfs_node *)node, name);
 }
 
+size_t vfs_ioctl(vfs_node_t *node, size_t requestType, void *argp) {
+    if(!node || !node->functions.ioctl) return -1;
+    return node->functions.ioctl((struct vfs_node *)node, requestType, argp);
+}
+
 // Utils
 char *vfs_remove_dot_chars(char *input) {
     list_t *inputList = strtoklist(input, "/", NULL);

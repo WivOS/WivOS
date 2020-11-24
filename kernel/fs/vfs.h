@@ -59,6 +59,7 @@ typedef struct vfs_functions {
     void (*open)(struct vfs_node *, uint32_t flags);
     void (*close)(struct vfs_node *);
     struct vfs_node *(*finddir)(struct vfs_node *, char *name);
+    size_t (*ioctl)(struct vfs_node *, size_t, void *);
 } vfs_functions_t;
 
 typedef struct vfs_node {
@@ -89,6 +90,7 @@ size_t vfs_lseek(vfs_node_t *node, off_t offset, int type);
 void vfs_open(vfs_node_t *node, uint32_t flags);
 void vfs_close(vfs_node_t *node);
 vfs_node_t *vfs_finddir(vfs_node_t *node, char *name);
+size_t vfs_ioctl(vfs_node_t *node, size_t requestType, void *argp);
 
 // Utils
 char *vfs_remove_dot_chars(char *input);

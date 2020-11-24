@@ -4,71 +4,64 @@ void lgdt(gdt_pointer_t* gdt) {
     asm volatile ( "lgdt %0" : : "m" (*gdt));
 }
 
-static gdt_entry_t gdtEntries[7] = {
-    { //null
-        .limit = 0x0000,
-        .base_low = 0x0000,
-        .base_mid = 0x00,
-        .base_hi = 0x00,
-        .access = 0b00000000,
-        .granularity = 0b00000000
-    },
-    { //kernel code
-        .limit = 0x0000,
-        .base_low = 0x0000,
-        .base_mid = 0x00,
-        .base_hi = 0x00,
-        .access = 0b10011010,
-        .granularity = 0b10101111
-    },
-    { //kernel data
-        .limit = 0x0000,
-        .base_low = 0x0000,
-        .base_mid = 0x00,
-        .base_hi = 0x00,
-        .access = 0b10010010,
-        .granularity = 0b00000000
-    },
-    { //user data
-        .limit = 0x0000,
-        .base_low = 0x0000,
-        .base_mid = 0x00,
-        .base_hi = 0x00,
-        .access = 0b11110010,
-        .granularity = 0b00000000
-    },
-    { //user code
-        .limit = 0x0000,
-        .base_low = 0x0000,
-        .base_mid = 0x00,
-        .base_hi = 0x00,
-        .access = 0b11111010,
-        .granularity = 0b00100000
-    },
-    { //tss first
-        .limit = 104,
-        .base_low = 0x0000,
-        .base_mid = 0x00,
-        .base_hi = 0x00,
-        .access = 0b10001001,
-        .granularity = 0b00100000
-    },
-    { //tss second zero
-        .limit = 0x0,
-        .base_low = 0x0000,
-        .base_mid = 0x00,
-        .base_hi = 0x00,
-        .access = 0x0,
-        .granularity = 0x0
-    },
-};
-
-static gdt_pointer_t gdtPointer = {
-    .size = sizeof(gdt_entry_t) * 7 - 1,
-    .entries = (gdt_entry_t **)&gdtEntries
-};
+static gdt_t gdt;
+static gdt_pointer_t gdtPointer;
 
 void gdt_init() {
+    // Null descriptor.
+    gdt.entries[0].limit       = 0;
+    gdt.entries[0].base_low  = 0;
+    gdt.entries[0].base_mid   = 0;
+    gdt.entries[0].access      = 0;
+    gdt.entries[0].granularity = 0;
+    gdt.entries[0].base_hi  = 0;
+
+    // Kernel code 64.
+    gdt.entries[1].limit       = 0;
+    gdt.entries[1].base_low  = 0;
+    gdt.entries[1].base_mid   = 0;
+    gdt.entries[1].access      = 0b10011010;
+    gdt.entries[1].granularity = 0b00100000;
+    gdt.entries[1].base_hi  = 0;
+
+    // Kernel data 64.
+    gdt.entries[2].limit       = 0;
+    gdt.entries[2].base_low  = 0;
+    gdt.entries[2].base_mid   = 0;
+    gdt.entries[2].access      = 0b10010010;
+    gdt.entries[2].granularity = 0;
+    gdt.entries[2].base_hi  = 0;
+
+    // User data 64.
+    gdt.entries[3].limit       = 0;
+    gdt.entries[3].base_low  = 0;
+    gdt.entries[3].base_mid   = 0;
+    gdt.entries[3].access      = 0b11110010;
+    gdt.entries[3].granularity = 0;
+    gdt.entries[3].base_hi  = 0;
+
+    // User code 64.
+    gdt.entries[4].limit       = 0;
+    gdt.entries[4].base_low  = 0;
+    gdt.entries[4].base_mid   = 0;
+    gdt.entries[4].access      = 0b11111010;
+    gdt.entries[4].granularity = 0b00100000;
+    gdt.entries[4].base_hi  = 0;
+
+    // TSS.
+    gdt.tss.length       = 104;
+    gdt.tss.base_low16   = 0;
+    gdt.tss.base_mid8    = 0;
+    gdt.tss.flags1       = 0b10001001;
+    gdt.tss.flags2       = 0;
+    gdt.tss.base_high8   = 0;
+    gdt.tss.base_upper32 = 0;
+    gdt.tss.reserved     = 0;
+
+    // Set the pointer.
+    gdtPointer.size    = sizeof(gdt) - 1;
+    gdtPointer.address = (uint64_t)&gdt;
+
     lgdt(&gdtPointer);
 
     asm volatile(
@@ -83,19 +76,17 @@ void gdt_init() {
         "movw $16, %%ax\n"
         "movw %%ax, %%ds\n"
         "movw %%ax, %%es\n"
-        "movw $0x1b, %%ax\n"
         "movw %%ax, %%fs\n"
         "movw %%ax, %%gs\n"
     ::: "memory", "rax");
 }
 
 void gdt_load_tss(size_t addr) {
-    gdtEntries[5].base_low = (uint16_t)addr;
-    gdtEntries[5].base_mid = (uint8_t)(addr >> 16);
-    gdtEntries[5].access = 0b10001001;
-    gdtEntries[5].granularity = 0;
-    gdtEntries[5].base_hi = (uint8_t)(addr >> 24);
-    uint32_t *entry = (uint32_t *)(&gdtEntries[6]);
-    entry[0] = (uint32_t)(addr >> 32);
-    entry[1] = 0;
+    gdt.tss.base_low16   = (uint16_t)addr;
+    gdt.tss.base_mid8    = (uint8_t)(addr >> 16);
+    gdt.tss.flags1       = 0b10001001;
+    gdt.tss.flags2       = 0;
+    gdt.tss.base_high8   = (uint8_t)(addr >> 24);
+    gdt.tss.base_upper32 = (uint32_t)(addr >> 32);
+    gdt.tss.reserved     = 0;
 }

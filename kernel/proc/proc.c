@@ -36,7 +36,7 @@ void scheduler_init() {
     sched_ready = 1;
 }
 
-void task_return_context(void *);
+void task_return_context(void *, void *);
 
 __attribute__((noinline)) static void _idle(void) {
     int _current_cpu = current_cpu;
@@ -69,9 +69,7 @@ __attribute__((noinline)) static void idle(void) {
     _idle();
 }
 
-static volatile size_t currentActiveThread = -1;
-
-volatile thread_t *get_next_task() {
+volatile thread_t *get_next_task(size_t currentActiveThread) {
     if(currentActiveThread != -1) {
         currentActiveThread++;
     } else {
@@ -116,7 +114,7 @@ void schedule(thread_regs_t *regs) {
     cpu_t *cpuLocal = &cpuLocals[current_cpu];
     pid_t currentProcess = cpuLocal->currentProcess;
     tid_t currentThread = cpuLocal->currentThread;
-    currentActiveThread = cpuLocal->currentActiveThread;
+    size_t currentActiveThread = cpuLocal->currentActiveThread;
 
     if(currentActiveThread != -1) {
         volatile thread_t *current_thread = activeThreads[currentActiveThread];
@@ -124,14 +122,14 @@ void schedule(thread_regs_t *regs) {
             goto skip_invalid_thread_context_save;
         }
         current_thread->context_regs = *regs;
-        processes[currentProcess]->threads[currentThread]->cpuNumber = -1;
+        current_thread->cpuNumber = -1;
         //TODO: FPU and add spinlocks to the threads
         spinlock_unlock(&current_thread->lock);
     }
 skip_invalid_thread_context_save:
     (void)0;
 
-    volatile thread_t *next_task = get_next_task();
+    volatile thread_t *next_task = get_next_task(currentActiveThread);
     if(next_task == NULL) {
         //printf("idle %x\n", current_cpu);
         idle();
@@ -142,26 +140,61 @@ skip_invalid_thread_context_save:
 
     cpuLocal->currentProcess = next_task->pid;
     cpuLocal->currentThread = next_task->tid;
-    cpuLocal->currentActiveThread = currentActiveThread;
+    cpuLocal->currentActiveThread = next_task->schedTid;
 
     if(next_task->pid != 0) {
+        cpuLocal->kernelStack = (size_t)next_task->kstack_addr;
         //TODO User mode
     }
 
     next_task->cpuNumber = current_cpu;
     asm volatile("cli");
     if(currentProcess == -1 || processes[next_task->pid]->process_pml4 != processes[currentProcess]->process_pml4) {
-        asm volatile ("mov %%rax, %%cr3" : : "a"(processes[next_task->pid]->process_pml4) : "memory");
+        spinlock_unlock(&schedulerLock);
+        spinlock_unlock(&syscallsLock);
+        task_return_context((thread_regs_t *)&next_task->context_regs, processes[next_task->pid]->process_pml4);
+    } else {
+        spinlock_unlock(&schedulerLock);
+        spinlock_unlock(&syscallsLock);
+        task_return_context((thread_regs_t *)&next_task->context_regs, 0);
     }
-    spinlock_unlock(&schedulerLock);
-    spinlock_unlock(&syscallsLock);
-    task_return_context((thread_regs_t *)&next_task->context_regs);
     //TODO, change context
 }
 
-void thread_create(pid_t pid, void *function) {
+pid_t proc_create(void *pml4) {
+    spinlock_lock(&schedulerLock);
+
+    pid_t pid = 0;
+    for(size_t i = 0; i < MAX_PROCESSES; i++) {
+        if(processes[i] == 0) {
+            pid = i;
+            break;
+        }
+    }
+
+    if(pid == 0) {
+        spinlock_unlock(&schedulerLock);
+        return -1; // Error: max processes reached.
+    }
+
+    processes[pid] = kmalloc(sizeof(process_t));
+    processes[pid]->threads = kcalloc(sizeof(thread_t *), MAX_THREADS);
+    processes[pid]->process_pml4 = pml4;
+    processes[pid]->pid = pid;
+    for(size_t i = 0; i < MAX_THREADS; i++) {
+        processes[pid]->threads[i] = NULL;
+    }
+
+    spinlock_unlock(&schedulerLock);
+
+    return pid;
+}
+
+#define STACK_LOCATION_TOP ((size_t)0x0000800000000000)
+
+tid_t thread_create(pid_t pid, void *function) {
     process_t *proc = (process_t *)processes[pid];
-    if(!proc) return;
+    if(!proc) return -1;
 
     spinlock_lock(&schedulerLock);
 
@@ -172,7 +205,7 @@ void thread_create(pid_t pid, void *function) {
         }
         if(tid == MAX_THREADS - 1) {
             spinlock_unlock(&schedulerLock);
-            return;
+            return -1;
         }
     }
     proc->threads[tid] = (void *)-2;
@@ -185,7 +218,7 @@ void thread_create(pid_t pid, void *function) {
         if(activeThreadID == 4095) {
             proc->threads[tid] = NULL;
             spinlock_unlock(&schedulerLock);
-            return;
+            return -1;
         }
     }
     activeThreads[activeThreadID] = (void *)-2;
@@ -198,18 +231,38 @@ void thread_create(pid_t pid, void *function) {
     thread->tid = tid;
     thread->schedTid = activeThreadID;
     thread->context_regs = (thread_regs_t){0};
-    thread->context_regs.cs = 0x08;
-    thread->context_regs.rflags = 0x202;
-    thread->context_regs.ss = 0x10;
+    if(!pid) {
+        thread->context_regs.cs = 0x08;
+        thread->context_regs.rflags = 0x202;
+        thread->context_regs.ss = 0x10;
+    } else {
+        thread->context_regs.cs = 0x23;
+        thread->context_regs.rflags = 0x202;
+        thread->context_regs.ss = 0x1b;
+    }
     thread->context_regs.rip = (uint64_t)function;
-    thread->kstack_addr = (void *)kmalloc(4096) + 4096;
+    thread->kstack_addr = (void *)kmalloc(0x1000) + 0x1000;
     thread->kstack_addr -= sizeof(uint64_t);
     *((size_t *)thread->kstack_addr) = 0;
 
-    thread->context_regs.rsp = (uint64_t)thread->kstack_addr;
+    if(pid) {
+        size_t stackGuardPage = STACK_LOCATION_TOP - (0x1000 * 4 + 0x1000) * (tid + 1);
+        size_t stackBottom = stackGuardPage + PAGE_SIZE;
+
+        void *memoryStackAddr = (void *)pmm_alloc(4);
+
+        vmm_map_pages(proc->process_pml4, (void *)(stackBottom), memoryStackAddr, 4, 0x7);
+        vmm_unmap_pages(proc->process_pml4, (void *)stackGuardPage, 1);
+
+        thread->context_regs.rsp = (uint64_t)(stackBottom) + 0x1000 * 4 - 8;
+    } else {
+        thread->context_regs.rsp = (uint64_t)thread->kstack_addr;
+    }
 
     activeThreads[activeThreadID] = thread;
     totalThreads++;
 
     spinlock_unlock(&schedulerLock);
+
+    return tid;
 }

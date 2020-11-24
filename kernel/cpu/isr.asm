@@ -111,10 +111,10 @@ service_interrupt:
 	mov ax, ds
 	push rax
 
-	mov ax, 0x0
+	mov ax, 0x10
 	mov ds, ax
 	mov es, ax
-	;mov fs, ax
+	;mov ss, ax
 	;mov gs, ax
 
 	mov rdi, rsp
@@ -124,7 +124,7 @@ service_interrupt:
 
 	mov ds, ax
 	mov es, ax
-	;mov fs, ax
+	;mov ss, ax
 	;mov gs, ax
 
 	pop r15
@@ -256,7 +256,7 @@ smp_init_trampoline:
     mov rcx, smp_trampoline_size
     rep movsb
 
-    mov rdi, rsi
+    mov rdi, r8
     call gdt_load_tss
 
     mov rax, 0x1
@@ -283,6 +283,11 @@ smp_init_cpu0_local:
 
 global task_return_context
 task_return_context:
+    test rsi, rsi
+    jz .dont_load_cr3
+    mov cr3, rsi
+    
+.dont_load_cr3:
     mov rsp, rdi
 
     pop r15
@@ -304,8 +309,18 @@ task_return_context:
     mov ds, ax
     mov es, ax
 
-    sti
-
     pop rax
 
+    sti
+
     iretq
+
+align 16
+global test_function
+test_function:
+    ; Test function to test if executing from userland space works
+    int 0x3
+    int 0x3
+    jmp $
+global end_test_function
+end_test_function:

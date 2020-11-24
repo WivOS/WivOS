@@ -35,4 +35,5 @@ typedef struct process {
 void scheduler_init();
 
 void schedule(thread_regs_t *regs);
-void thread_create(pid_t pid, void *function);
+pid_t proc_create(void *pml4);
+tid_t thread_create(pid_t pid, void *function);

@@ -63,6 +63,10 @@ void lapic_legacy_irq(int cpu, uint8_t irq, int status) {
     lapic_redirect(irq + 0x20, irq, 0, cpu, status);
 }
 
+void lapic_connect_gsi_to_vec(int cpu, uint8_t vec, uint32_t gsi, uint16_t flags, int status) {
+    lapic_redirect(vec, gsi, flags, cpu, status);
+}
+
 void lapic_write(uint32_t reg, uint32_t value) {
     *((uint32_t *)((uint64_t)lapic_base + reg)) = value;
 }

@@ -33,6 +33,8 @@ SRCS += kernel/fs/vfs.c
 
 SRCS += kernel/fs/initrd/tar.c
 
+SRCS += kernel/fs/devfs/devfs.c
+
 SRCS += kernel/modules/modules.c
 
 SRCS += kernel/cpu/isr.asm
@@ -91,12 +93,18 @@ $(BUILD_DIR)/%.bin: %.real
 qemu: $(BIN_DIR)/image.hdd
 	powershell.exe -File run.ps1
 
+qemu2: $(BIN_DIR)/image.hdd
+	VIRGL_HOST_DEBUG=cmd /usr/local/bin/qemu-system-x86_64 --enable-kvm -hdd bin/RELEASE/image.hdd -m 4G -smp 4 -machine q35 -debugcon stdio -device virtio-gpu,virgl=on -display sdl,gl=on
+
 image: $(BIN_DIR)/image.hdd
+
+modulesMake:
+	@make -C modules install
 
 $(BIN_DIR)/initrd.tar: $(INITRD)/*
 	@shopt -s dotglob && pushd $(INITRD) > /dev/null && tar -cf ../$@ * && popd > /dev/null
 
-$(BIN_DIR)/image.hdd: $(BUILD_DIR)/kernel/proc/trampoline.bin $(BIN_DIR)/wivos.elf $(BIN_DIR)/initrd.tar boot/limine.cfg boot/limine.bin boot/limine-install
+$(BIN_DIR)/image.hdd: $(BUILD_DIR)/kernel/proc/trampoline.bin $(BIN_DIR)/wivos.elf modulesMake $(BIN_DIR)/initrd.tar boot/limine.cfg boot/limine.bin boot/limine-install
 	@mkdir -p $(@D)
 	@echo "Creating disk"
 	@rm -rf $@
