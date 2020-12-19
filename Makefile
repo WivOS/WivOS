@@ -1,6 +1,6 @@
 SHELL = /bin/bash
 
-CFLAGS := -g -Wall -ffreestanding -Werror -Wno-unused-variable -Wno-unused-function -fno-pic -Ikernel -Iexternal/lai/include -O2 -g
+CFLAGS := -g -Wall -ffreestanding -Werror -Wno-unused-variable -Wno-strict-aliasing -Wno-unused-function -fno-pic -Ikernel -Iexternal/lai/include -O2 -g -mavx -Wno-address-of-packed-member
 LDFLAGS := -nostdlib -no-pie
 
 ifeq ($(DEBUG), 1)
@@ -28,6 +28,7 @@ SRCS += kernel/acpi/apic.c
 
 SRCS += kernel/proc/smp.c
 SRCS += kernel/proc/proc.c
+SRCS += kernel/proc/syscalls.c
 
 SRCS += kernel/fs/vfs.c
 
@@ -94,17 +95,20 @@ qemu: $(BIN_DIR)/image.hdd
 	powershell.exe -File run.ps1
 
 qemu2: $(BIN_DIR)/image.hdd
-	VIRGL_HOST_DEBUG=cmd /usr/local/bin/qemu-system-x86_64 --enable-kvm -hdd bin/RELEASE/image.hdd -m 4G -smp 4 -machine q35 -debugcon stdio -device virtio-gpu,virgl=on -display sdl,gl=on
+	VREND_DEBUG="guestallow" /usr/local/bin/qemu-system-x86_64 --enable-kvm -hdd bin/RELEASE/image.hdd -m 4G -smp 4 -machine q35 -debugcon stdio -device virtio-gpu,virgl=on -display sdl,gl=on -device qemu-xhci -drive id=pendrive,file=test.img,format=raw,if=none -device usb-storage,drive=pendrive
 
 image: $(BIN_DIR)/image.hdd
 
 modulesMake:
 	@make -C modules install
 
+appsMake:
+	@make -C usertests install
+
 $(BIN_DIR)/initrd.tar: $(INITRD)/*
 	@shopt -s dotglob && pushd $(INITRD) > /dev/null && tar -cf ../$@ * && popd > /dev/null
 
-$(BIN_DIR)/image.hdd: $(BUILD_DIR)/kernel/proc/trampoline.bin $(BIN_DIR)/wivos.elf modulesMake $(BIN_DIR)/initrd.tar boot/limine.cfg boot/limine.bin boot/limine-install
+$(BIN_DIR)/image.hdd: $(BUILD_DIR)/kernel/proc/trampoline.bin $(BIN_DIR)/wivos.elf modulesMake appsMake $(BIN_DIR)/initrd.tar boot/limine.cfg boot/limine.bin boot/limine-install
 	@mkdir -p $(@D)
 	@echo "Creating disk"
 	@rm -rf $@

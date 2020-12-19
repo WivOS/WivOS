@@ -234,6 +234,93 @@ service_interrupt3:
 
 	iretq
 
+invalid_syscall:
+    mov rax, -1
+    ret
+
+syscall_count equ ((syscall_table.end - syscall_table) / 8)
+syscall_table:
+    extern debug_syscall
+    dq debug_syscall ; 0x0
+    extern open_syscall
+    dq open_syscall ; 0x1
+    extern read_syscall
+    dq read_syscall ; 0x2
+    extern write_syscall
+    dq write_syscall ; 0x3
+    extern close_syscall
+    dq close_syscall ; 0x4
+    extern ioctl_syscall
+    dq ioctl_syscall ; 0x5
+    extern alloc_at_syscall
+    dq alloc_at_syscall ; 0x6
+    extern fork_syscall
+    dq fork_syscall ; 0x7
+    dq invalid_syscall
+.end:
+
+global syscall_entry
+syscall_entry:
+    mov qword [gs:0024], rsp
+    mov rsp, qword [gs:0016]
+
+    sti
+
+    push 0x1b            ; ss
+    push qword [gs:0024] ; rsp
+    push r11             ; rflags
+    push 0x23            ; cs
+    push rcx             ; rip
+
+    push rax
+	push rbx
+	push rcx
+	push rdx
+	push rbp
+	push rsi
+	push rdi
+	push r8
+	push r9
+	push r10
+	push r11
+	push r12
+	push r13
+	push r14
+	push r15
+
+    cmp rax, syscall_count
+    jae .err
+
+    mov rdi, rsp
+    xor rbp, rbp
+    call [syscall_table + rax * 8]
+
+.out:
+    pop r15
+	pop r14
+	pop r13
+	pop r12
+	pop r11
+	pop r10
+	pop r9
+	pop r8
+	pop rdi
+	pop rsi
+	pop rbp
+	pop rdx
+	pop rcx
+	pop rbx
+
+    cli
+
+    mov rsp, qword [gs:0024]
+
+    o64 sysret
+
+.err:
+    mov rax, -1
+    jmp .out
+
 global smp_check_ap_flag
 smp_check_ap_flag:
     xor rax, rax
@@ -315,6 +402,7 @@ task_return_context:
 
     iretq
 
+;Todo: Remove this when not needed.
 align 16
 global test_function
 test_function:

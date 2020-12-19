@@ -4,7 +4,7 @@
 gentree_t *devfs_tree;
 
 vfs_node_t *devfs_finddir(vfs_node_t *parent, char *name) {
-    printf("DevFS: Name: %s\n", name);
+    /*printf("DevFS: Name: %s\n", name);*/
 
     foreach(child, devfs_tree->root->children) {
         gentreenode_t *tempChild = (gentreenode_t *)child->val;

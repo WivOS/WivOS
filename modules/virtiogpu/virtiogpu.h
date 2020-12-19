@@ -39,38 +39,38 @@ typedef struct {
 #define VIRTIO_DRIVER_FAILED 0x80
 
 typedef struct {
-    uint64_t address;
-    uint32_t length;
-    uint16_t flags;
-    uint16_t next;
+    volatile uint64_t address;
+    volatile uint32_t length;
+    volatile uint16_t flags;
+    volatile uint16_t next;
 } queue_descriptor_t;
 
 typedef struct {
-    uint16_t flags;
-    uint16_t index;
-    uint16_t rings[];
+    volatile uint16_t flags;
+    volatile uint16_t index;
+    volatile uint16_t rings[];
 } queue_available_t;
 
 typedef struct {
-    uint32_t index;
-    uint32_t length;
+    volatile uint32_t index;
+    volatile uint32_t length;
 } queue_used_element_t;
 
 typedef struct {
-    uint16_t flags;
-    uint16_t index;
-    queue_used_element_t rings[];
+    volatile uint16_t flags;
+    volatile uint16_t index;
+    volatile queue_used_element_t rings[];
 } queue_used_t;
 
 typedef struct {
-    queue_descriptor_t *descriptors;
-    queue_available_t *available;
-    queue_used_t *used;
-    uint16_t freeList;
-    uint16_t freeCount;
+    volatile queue_descriptor_t *descriptors;
+    volatile queue_available_t *available;
+    volatile queue_used_t *used;
+    volatile uint16_t freeList;
+    volatile uint16_t freeCount;
     uint16_t queueSize;
     uint16_t queueMask;
-    uint16_t lastUsed;
+    volatile uint16_t lastUsed;
 } queue_virtqueue_t;
 
 #define VIRTQ_DESC_F_NEXT 1
@@ -410,6 +410,7 @@ typedef struct {
 #define VIRTGPU_IOCTL_CREATE_RESOURCE_3D 0xB
 #define VIRTGPU_IOCTL_ATTACH_RESOURCE_3D 0xC
 #define VIRTGPU_IOCTL_TRANSFER_FROM_HOST_3D 0xD
+#define VIRTGPU_IOCTL_TRANSFER_TO_HOST_3D 0xF
 
 typedef struct {
     uint32_t width;
@@ -445,6 +446,7 @@ typedef struct {
 typedef struct {
     uint32_t width;
     uint32_t height;
+    uint32_t notTransfer;
 } virtgpu_transfer_and_flush_t;
 
 typedef struct {
@@ -472,3 +474,14 @@ typedef struct {
 typedef struct {
     uint32_t resourceID;
 } virtgpu_attach_resource_3d_t;
+
+/** Polygon fill mode */
+#define PIPE_POLYGON_MODE_FILL  0
+#define PIPE_POLYGON_MODE_LINE  1
+#define PIPE_POLYGON_MODE_POINT 2
+
+/** Polygon face specification, eg for culling */
+#define PIPE_FACE_NONE           0
+#define PIPE_FACE_FRONT          1
+#define PIPE_FACE_BACK           2
+#define PIPE_FACE_FRONT_AND_BACK (PIPE_FACE_FRONT | PIPE_FACE_BACK)

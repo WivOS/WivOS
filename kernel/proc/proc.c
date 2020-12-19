@@ -3,22 +3,54 @@
 #include <acpi/apic.h>
 #include <util/util.h>
 
-volatile static spinlock_t schedulerLock = INIT_LOCK();
+volatile spinlock_t schedulerLock = INIT_LOCK();
 volatile static spinlock_t syscallsLock = INIT_LOCK();
 volatile static spinlock_t syscalls2Lock = INIT_LOCK();
 
 volatile static process_t **processes = NULL;
-volatile static thread_t **activeThreads = NULL;
-volatile static size_t totalThreads = 0;
+volatile thread_t **activeThreads = NULL;
+volatile size_t totalThreads = 0;
 volatile int sched_ready = 0;
+
+volatile static uint8_t default_fxstate[512] __attribute__((aligned(16)));
+
+thread_t *get_active_thread(tid_t activeThread) {
+    if(activeThread >= 4096) return NULL;
+
+    return (thread_t *)activeThreads[activeThread];
+}
+
+process_t *get_active_process(pid_t pid) {
+    if(pid >= 4096) return NULL;
+
+    return (process_t *)processes[pid];
+}
 
 void thread_main() {
     while(1) {
+        asm volatile("hlt");
     }
 }
 
+#define fxsave(ptr) ({ \
+    asm volatile ( \
+                "fxsave %0;" \
+                : \
+                : "m" (*(ptr)) \
+    ); \
+})
+
+#define fxrstor(ptr) ({ \
+    asm volatile ( \
+                "fxrstor %0;" \
+                : \
+                : "m" (*(ptr)) \
+    ); \
+})
+
 void scheduler_init() {
     processes = kcalloc(sizeof(process_t *), MAX_PROCESSES);
+    fxsave(&default_fxstate);
 
     processes[0] = kmalloc(sizeof(process_t));
     processes[0]->threads = kcalloc(sizeof(thread_t *), MAX_THREADS);
@@ -123,6 +155,10 @@ void schedule(thread_regs_t *regs) {
         }
         current_thread->context_regs = *regs;
         current_thread->cpuNumber = -1;
+        if(currentProcess) {
+            current_thread->ustack_addr = (void *)cpuLocal->threadUserStack;
+            fxsave(&current_thread->fxstate);
+        }
         //TODO: FPU and add spinlocks to the threads
         spinlock_unlock(&current_thread->lock);
     }
@@ -143,7 +179,9 @@ skip_invalid_thread_context_save:
     cpuLocal->currentActiveThread = next_task->schedTid;
 
     if(next_task->pid != 0) {
-        cpuLocal->kernelStack = (size_t)next_task->kstack_addr;
+        cpuLocal->threadKernelStack = (size_t)next_task->kstack_addr;
+        cpuLocal->threadUserStack = (size_t)next_task->ustack_addr;
+        fxrstor(&next_task->fxstate);
         //TODO User mode
     }
 
@@ -152,7 +190,7 @@ skip_invalid_thread_context_save:
     if(currentProcess == -1 || processes[next_task->pid]->process_pml4 != processes[currentProcess]->process_pml4) {
         spinlock_unlock(&schedulerLock);
         spinlock_unlock(&syscallsLock);
-        task_return_context((thread_regs_t *)&next_task->context_regs, processes[next_task->pid]->process_pml4);
+        task_return_context((thread_regs_t *)&next_task->context_regs, (void *)processes[next_task->pid]->process_pml4);
     } else {
         spinlock_unlock(&schedulerLock);
         spinlock_unlock(&syscallsLock);
@@ -184,6 +222,12 @@ pid_t proc_create(void *pml4) {
     for(size_t i = 0; i < MAX_THREADS; i++) {
         processes[pid]->threads[i] = NULL;
     }
+
+    processes[pid]->brkAddress = BASE_BRK_LOCATION;
+    spinlock_unlock(&processes[pid]->brkLock);
+
+    processes[pid]->fileHandles = (vfs_node_t **)kmalloc(sizeof(vfs_node_t *) * MAX_FILE_HANDLES);
+    spinlock_unlock(&processes[pid]->filesLock);
 
     spinlock_unlock(&schedulerLock);
 
@@ -241,7 +285,7 @@ tid_t thread_create(pid_t pid, void *function) {
         thread->context_regs.ss = 0x1b;
     }
     thread->context_regs.rip = (uint64_t)function;
-    thread->kstack_addr = (void *)kmalloc(0x1000) + 0x1000;
+    thread->kstack_addr = (void *)kmalloc(0x8000) + 0x8000;
     thread->kstack_addr -= sizeof(uint64_t);
     *((size_t *)thread->kstack_addr) = 0;
 
@@ -251,13 +295,17 @@ tid_t thread_create(pid_t pid, void *function) {
 
         void *memoryStackAddr = (void *)pmm_alloc(4);
 
-        vmm_map_pages(proc->process_pml4, (void *)(stackBottom), memoryStackAddr, 4, 0x7);
-        vmm_unmap_pages(proc->process_pml4, (void *)stackGuardPage, 1);
+        vmm_map_pages((void *)proc->process_pml4, (void *)(stackBottom), memoryStackAddr, 4, 0x7);
+        vmm_unmap_pages((void *)proc->process_pml4, (void *)stackGuardPage, 1);
 
         thread->context_regs.rsp = (uint64_t)(stackBottom) + 0x1000 * 4 - 8;
     } else {
         thread->context_regs.rsp = (uint64_t)thread->kstack_addr;
     }
+
+    memcpy((void *)thread->fxstate, (void *)default_fxstate, 512);
+
+    spinlock_unlock(&thread->lock);
 
     activeThreads[activeThreadID] = thread;
     totalThreads++;

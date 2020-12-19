@@ -45,8 +45,11 @@ void pci_write_byte(pci_device_t *device, uint32_t offset, uint8_t value);
 void pci_write_word(pci_device_t *device, uint32_t offset, uint16_t value);
 void pci_write_dword(pci_device_t *device, uint32_t offset, uint32_t value);
 
+void pci_enable_busmastering(pci_device_t *device);
+
 size_t pci_read_bar(pci_device_t *device, int bar, pci_bar_t *out);
 pci_device_t *pci_get_device_by_vendor(uint16_t vendor, uint16_t device);
+pci_device_t *pci_get_device_by_class_subclass(uint8_t class, uint8_t subclass, uint8_t progIF, size_t index);
 size_t pci_register_msi(pci_device_t *device, uint8_t vector);
 
 void pci_init();

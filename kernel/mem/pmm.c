@@ -31,7 +31,7 @@ static int pmm_bitmap_isfree(size_t index, size_t count) {
     return 1;
 }
 
-spinlock_t global_pmm_lock = INIT_LOCK();
+volatile static spinlock_t global_pmm_lock = INIT_LOCK();
 
 void pmm_init(stivale2_struct_t *stivale) {
     printf("[PMM]Initialisation in progress\n");

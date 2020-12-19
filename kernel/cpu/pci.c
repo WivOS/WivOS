@@ -235,11 +235,33 @@ size_t pci_register_msi(pci_device_t *device, uint8_t vector) {
     return 1;
 }
 
+void pci_enable_busmastering(pci_device_t *device) {
+    if(!(pci_read_dword(device, 0x4) & (1 << 2))) {
+        pci_write_dword(device, 0x4, pci_read_dword(device, 0x4) | (1 << 2) | (1 << 1));
+    }
+}
+
 pci_device_t *pci_get_device_by_vendor(uint16_t vendor, uint16_t device) {
     for (size_t i = 0; i < list_size(pciList); i++) {
         pci_device_t *dev = (pci_device_t *)((list_get_node_by_index(pciList, i))->val);
 
         if(dev->vendorID == vendor && dev->deviceID == device) return dev;
+    }
+
+    return NULL;
+}
+
+pci_device_t *pci_get_device_by_class_subclass(uint8_t class, uint8_t subclass, uint8_t progIF, size_t index) {
+    size_t k = 0;
+    for (size_t i = 0; i < list_size(pciList); i++) {
+        pci_device_t *dev = (pci_device_t *)((list_get_node_by_index(pciList, i))->val);
+
+        if(dev->classCode == class && dev->subclass == subclass && dev->progIF == progIF) {
+            if(k == index) {
+                return dev;
+            }
+            k++;
+        }
     }
 
     return NULL;

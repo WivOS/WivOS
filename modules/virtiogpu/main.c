@@ -14,11 +14,11 @@ static volatile uint32_t *isrStatus = NULL;
 static volatile uint64_t notifyQueue0 = 0;
 static volatile uint64_t notifyQueue1 = 0;
 static void *addrtemp = NULL;
-static uint16_t activeQueue = 0;
-static virtio_gpu_config_t *gpuConfig = NULL;
-static void *framebuffer = NULL;
+static volatile uint16_t activeQueue = 0;
+static volatile virtio_gpu_config_t *gpuConfig = NULL;
+static volatile void *framebuffer = NULL;
 
-static spinlock_t ioEvent = INIT_LOCK();
+static volatile spinlock_t ioEvent = INIT_LOCK();
 
 #define atomic_st_rel(value, rhs) \
     __atomic_store_n((value), (rhs), __ATOMIC_RELEASE)
@@ -57,7 +57,7 @@ static void init_queue(uint16_t index) {
     }
 
     vq->queueSize = queueSize;
-    vq->queueMask = (1 << ((2 * 8) - 1 - __builtin_clz(queueSize))) - 1;
+    vq->queueMask = 0xFF;//(1 << ((2 * 8) - 1 - __builtin_clz(queueSize))) - 1;
 
     *virtioRegs->queueDesc = ((uint64_t)vq->descriptors - VIRT_PHYS_BASE);
     *virtioRegs->queueGuest = ((uint64_t)vq->available - VIRT_PHYS_BASE);
@@ -71,11 +71,11 @@ static void init_queue(uint16_t index) {
 static queue_descriptor_t *virtio_alloc_desc_chain(queue_virtqueue_t *queue, size_t count, uint16_t *start_index) {
     if(queue->freeCount < count) return NULL;
 
-    queue_descriptor_t *last = NULL;
+    volatile queue_descriptor_t *last = NULL;
     uint16_t lastIndex = 0;
     while(count > 0) {
         uint16_t i = queue->freeList;
-        queue_descriptor_t *desc = &queue->descriptors[i];
+        volatile queue_descriptor_t *desc = &queue->descriptors[i];
 
         queue->freeList = desc->next;
         queue->freeCount--;
@@ -94,11 +94,11 @@ static queue_descriptor_t *virtio_alloc_desc_chain(queue_virtqueue_t *queue, siz
 
     if(start_index) *start_index = lastIndex;
 
-    return last;
+    return (queue_descriptor_t *)last;
 }
 
 static void virtio_submit_chain(queue_virtqueue_t *queue, uint16_t descIndex) {
-    queue_available_t *avail = queue->available;
+    volatile queue_available_t *avail = queue->available;
 
     avail->rings[avail->index & queue->queueMask] = descIndex;
     __asm__ __volatile__ ("" ::: "memory");
@@ -118,13 +118,11 @@ static size_t send_command_response(const void *cmd, size_t cmdLen, void **_res,
     uint16_t i = 0;
     queue_descriptor_t *desc = virtio_alloc_desc_chain(vqs[0], 2, &i);
 
-    //printf("%x\n", i);
-
     desc->address = (uint64_t)((size_t)cmd - VIRT_PHYS_BASE); // TODO: Hacked value
     desc->length = cmdLen;
     desc->flags |= VIRTQ_DESC_F_NEXT;
 
-    desc = &vqs[0]->descriptors[desc->next];
+    desc = (queue_descriptor_t *)&vqs[0]->descriptors[desc->next];
 
     void *res = kmalloc(resLen);
     memset(res, 0, resLen);
@@ -156,7 +154,7 @@ static size_t send_command_response_cursor(const void *cmd, size_t cmdLen, void 
     desc->length = cmdLen;
     desc->flags |= VIRTQ_DESC_F_NEXT;
 
-    desc = &vqs[1]->descriptors[desc->next];
+    desc = (queue_descriptor_t *)&vqs[1]->descriptors[desc->next];
 
     void *res = kmalloc(resLen);
     memset(res, 0, resLen);
@@ -180,11 +178,11 @@ static size_t send_command_response_cursor(const void *cmd, size_t cmdLen, void 
 
 extern idt_fn_t irq_functions[0x40];
 
-static void virtio_irq_driver_callback(uint16_t vq, queue_used_element_t *usedElem) {
+static void virtio_irq_driver_callback(uint16_t vq, volatile queue_used_element_t *usedElem) {
     uint16_t i = usedElem->index;
     for(;;) {
         int next;
-        queue_descriptor_t *desc = &vqs[vq]->descriptors[i];
+        volatile queue_descriptor_t *desc = &vqs[vq]->descriptors[i];
 
         if(desc->flags & VIRTQ_DESC_F_NEXT) {
             next = desc->next;
@@ -215,7 +213,7 @@ static void irq_handler(irq_regs_t *regs) {
             //printf("Er1: %x\n", currentIndex);
             for(uint16_t i = vqs[r]->lastUsed; i != (currentIndex & vqs[r]->queueMask); i = (i + 1) & vqs[r]->queueMask) {
                 //printf("Er2: %x\n", i);
-                queue_used_element_t *usedElem = &vqs[r]->used->rings[i];
+                volatile queue_used_element_t *usedElem = (queue_used_element_t *)&vqs[r]->used->rings[i];
 
                 virtio_irq_driver_callback(r, usedElem);
 
@@ -276,6 +274,8 @@ static void gpu_open(vfs_node_t *file, uint32_t flags) {
 
 static uint32_t resourceAllocator = 15;
 static uint32_t contextAllocator = 1;
+
+extern volatile spinlock_t schedulerLock;
 
 static size_t gpu_ioctl(vfs_node_t *file, size_t requestType, void *argp) {
     virtgpu_node_reference_t *reference = gpu_get_reference(file);
@@ -386,7 +386,11 @@ static size_t gpu_ioctl(vfs_node_t *file, size_t requestType, void *argp) {
                 req->req.resourceID = reference->resourceID;
                 req->req.nrEntries = 1;
             
-                req->mem.address = ((uint64_t)virtioAttachBacking->address - VIRT_PHYS_BASE);
+                if(!cpuLocals[current_cpu].currentProcess) {
+                    req->mem.address = (virtioAttachBacking->address - VIRT_PHYS_BASE);
+                } else {
+                    req->mem.address = (uint64_t)vmm_get_phys((void *)get_active_process(cpuLocals[current_cpu].currentProcess)->process_pml4, (void *)virtioAttachBacking->address);
+                }
                 req->mem.length = virtioAttachBacking->length;
 
                 virtio_gpu_ctrl_hdr_t *res = NULL;
@@ -438,6 +442,7 @@ static size_t gpu_ioctl(vfs_node_t *file, size_t requestType, void *argp) {
                 if(!argp) return -1;
 
                 virtgpu_transfer_and_flush_t *virtioTransferAndFlush = (virtgpu_transfer_and_flush_t *)argp;
+                if(!virtioTransferAndFlush->notTransfer)
                 {
                     virtio_gpu_transfer_to_host_2d_t *req = (virtio_gpu_transfer_to_host_2d_t *)kmalloc(sizeof(virtio_gpu_transfer_to_host_2d_t));
                     req->header.type = VIRTIO_GPU_CMD_TRANSFER_TO_HOST_2D;
@@ -446,6 +451,7 @@ static size_t gpu_ioctl(vfs_node_t *file, size_t requestType, void *argp) {
                     req->rect.height = virtioTransferAndFlush->height;
                     req->offset = 0;
                     req->resourceID = reference->resourceID;
+                    req->header.ctxID = reference->ctxID;
 
                     virtio_gpu_ctrl_hdr_t *res = NULL;
                     send_command_response(req, sizeof(virtio_gpu_transfer_to_host_2d_t), (void **)&res, sizeof(virtio_gpu_ctrl_hdr_t));
@@ -467,6 +473,7 @@ static size_t gpu_ioctl(vfs_node_t *file, size_t requestType, void *argp) {
                     req->rect.width = virtioTransferAndFlush->width;
                     req->rect.height = virtioTransferAndFlush->height;
                     req->resourceID = reference->resourceID;
+                    req->header.ctxID = reference->ctxID;
 
                     virtio_gpu_ctrl_hdr_t *res = NULL;
                     send_command_response(req, sizeof(virtio_gpu_resource_flush_t), (void **)&res, sizeof(virtio_gpu_ctrl_hdr_t));
@@ -560,6 +567,8 @@ static size_t gpu_ioctl(vfs_node_t *file, size_t requestType, void *argp) {
                 req->header.type = VIRTIO_GPU_CMD_SUBMIT_3D;
                 req->header.ctxID = reference->ctxID;
                 req->size = sizeInBytes;
+                req->header.flags = 1;
+                req->header.fenceID = 1;
 
                 size_t offset = 0;
                 for(size_t i = 0; i < reference->commandCount; i++) {
@@ -591,7 +600,7 @@ static size_t gpu_ioctl(vfs_node_t *file, size_t requestType, void *argp) {
 
                 virtio_gpu_ctrl_hdr_t *res = NULL;
                 send_command_response(req, sizeof(virtio_gpu_submit_3d_t) + sizeInBytes, (void **)&res, sizeof(virtio_gpu_ctrl_hdr_t));
-                printf("%x\n", res->type);
+                //printf("%x\n", res->type);
             
                 if(res->type != VIRTIO_GPU_RESP_OK_NODATA) {
                     kfree(res);
@@ -660,6 +669,40 @@ static size_t gpu_ioctl(vfs_node_t *file, size_t requestType, void *argp) {
                 {
                     virtio_gpu_transfer_from_host_3d_t *req = (virtio_gpu_transfer_from_host_3d_t *)kmalloc(sizeof(virtio_gpu_transfer_from_host_3d_t));
                     req->header.type = VIRTIO_GPU_CMD_TRANSFER_FROM_HOST_3D;
+                    req->box.x = req->box.y = req->box.z = 0;
+                    req->box.width = virtioTransfer->width;
+                    req->box.height = virtioTransfer->height;
+                    req->box.depth = virtioTransfer->depth;
+                    req->layerStride = virtioTransfer->layerStride;
+                    req->stride = virtioTransfer->stride;
+                    req->level = virtioTransfer->level;
+                    req->offset = virtioTransfer->offset;
+                    req->resourceID = reference->resourceID;
+
+                    virtio_gpu_ctrl_hdr_t *res = NULL;
+                    send_command_response(req, sizeof(virtio_gpu_transfer_from_host_3d_t), (void **)&res, sizeof(virtio_gpu_ctrl_hdr_t));
+
+                    if(res->type != VIRTIO_GPU_RESP_OK_NODATA) {
+                        kfree(res);
+                        kfree(req);
+                        return -1;
+                    }
+
+                    kfree(res);
+                    kfree(req);
+
+                    return 0;
+                }
+            }
+
+        case VIRTGPU_IOCTL_TRANSFER_TO_HOST_3D:
+            {
+                if(!argp) return -1;
+
+                virtgpu_transfer_3d_t *virtioTransfer = (virtgpu_transfer_3d_t *)argp;
+                {
+                    virtio_gpu_transfer_from_host_3d_t *req = (virtio_gpu_transfer_from_host_3d_t *)kmalloc(sizeof(virtio_gpu_transfer_from_host_3d_t));
+                    req->header.type = VIRTIO_GPU_CMD_TRANSFER_TO_HOST_3D;
                     req->box.x = req->box.y = req->box.z = 0;
                     req->box.width = virtioTransfer->width;
                     req->box.height = virtioTransfer->height;

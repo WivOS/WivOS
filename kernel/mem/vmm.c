@@ -77,6 +77,20 @@ void vmm_unmap_pages(pt_t *pml4param, void *addr, size_t size) {
     }
 }
 
+void *vmm_get_phys(pt_t *pml4param, void *addr) {
+    pt_offset_t offset = addr_to_offsets(addr);
+
+    pt_t *pml4 = (pt_t *)((uint64_t)pml4param + VIRT_PHYS_BASE);
+    if(!pml4) return NULL;
+    pt_t *pdp = vmm_getnull(pml4, offset.pml4_off);
+    if(!pdp) return NULL;
+    pt_t *pd = vmm_getnull(pdp, offset.pdp_off);
+    if(!pd) return NULL;
+    pt_t *pt = vmm_getnull(pd, offset.pd_off);
+    if(!pt) return NULL;
+    return (void *)(pt->entries[offset.pt_off] & ~0xFFF);
+}
+
 void vmm_map_pages_huge(pt_t *pml4param, void *addr, void *phys, size_t size, uint64_t permissions) {
     while(size--) {
         pt_offset_t offset = addr_to_offsets(addr);
@@ -114,4 +128,74 @@ pt_t *create_new_pml4() {
     vmm_map_pages_huge(pml4, (void *)0xFFFFFFFF80000000, NULL, 64, 3);
 
     return pml4;
+}
+
+static inline size_t entries_to_virt_addr(size_t pml4_entry,
+                                   size_t pdpt_entry,
+                                   size_t pd_entry,
+                                   size_t pt_entry) {
+    size_t virt_addr = 0;
+    virt_addr |= pml4_entry << 39;
+    virt_addr |= pdpt_entry << 30;
+    virt_addr |= pd_entry << 21;
+    virt_addr |= pt_entry << 12;
+    return virt_addr;
+}
+
+void *memcpy64(void *dest, const void *src, size_t n) {
+    uint64_t *pdest = dest;
+    const uint64_t *psrc = src;
+
+    for (size_t i = 0; i < (n / sizeof(uint64_t)); i++) {
+        pdest[i] = psrc[i];
+    }
+
+    return dest;
+}
+
+pt_t *fork_pml4(pt_t *pml4) {
+    pt_t *newPml4 = create_new_pml4();
+
+    pt_t *pdpt;
+    pt_t *pd;
+    pt_t *pt;
+
+    struct {
+        uint8_t data[PAGE_SIZE];
+    } *pool;
+
+    size_t poolSize = 4096;
+    pool = pmm_alloc(poolSize);
+    size_t poolPtr = 0;
+
+    for(size_t i = 0; i < 256; i++) {
+        if(((pt_t *)((size_t)pml4 + VIRT_PHYS_BASE))->entries[i] & VMM_PRESENT) {
+            pdpt = (pt_t *)((((pt_t *)((size_t)pml4 + VIRT_PHYS_BASE))->entries[i] & 0xFFFFFFFFFFFFF000) + VIRT_PHYS_BASE);
+            for(size_t j = 0; j < 512; j++) {
+                if(pdpt->entries[j] & VMM_PRESENT) {
+                    pd = (pt_t *)((pdpt->entries[j] & 0xFFFFFFFFFFFFF000) + VIRT_PHYS_BASE);
+                    for(size_t k = 0; k < 512; k++) {
+                        if(pd->entries[k] & VMM_PRESENT) {
+                            pt = (pt_t *)((pd->entries[k] & 0xFFFFFFFFFFFFF000) + VIRT_PHYS_BASE);
+                            for(size_t l = 0; l < 512; l++) {
+                                if(pt->entries[l] & VMM_PRESENT) {
+                                    if(poolPtr == poolSize) {
+                                        pool = pmm_alloc(poolSize);
+                                        poolPtr = 0;
+                                    }
+                                    size_t newPage = (size_t)&pool[poolPtr++];
+                                    memcpy64((void *)(newPage + VIRT_PHYS_BASE), (void *)((pt->entries[l] & 0xFFFFFFFFFFFFF000) + VIRT_PHYS_BASE), PAGE_SIZE);
+                                    vmm_map_pages(newPml4, (void *)entries_to_virt_addr(i, j, k, l), (void *)newPage, 1, (pt->entries[l] & 0xFFF));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    pmm_free(pool + poolPtr, poolSize - poolPtr);
+
+    return newPml4;
 }

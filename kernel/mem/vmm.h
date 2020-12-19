@@ -33,6 +33,8 @@ extern pt_t *kernel_pml4;
 void vmm_init();
 void vmm_map_pages(pt_t *pml4, void *addr, void *phys, size_t size, uint64_t permissions);
 void vmm_unmap_pages(pt_t *pml4, void *addr, size_t size);
+void *vmm_get_phys(pt_t *pml4param, void *addr);
 void vmm_map_pages_huge(pt_t *pml4, void *addr, void *phys, size_t size, uint64_t permissions);
 void vmm_unmap_pages_huge(pt_t *pml4, void *addr, size_t size);
 pt_t *create_new_pml4();
+pt_t *fork_pml4(pt_t *pml4);

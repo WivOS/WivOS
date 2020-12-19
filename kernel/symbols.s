@@ -18,6 +18,14 @@ kernel_symbols_start:
     dq acpi_init
     db 'acpi_init', 0
 
+    extern activeThreads
+    dq activeThreads
+    db 'activeThreads', 0
+
+    extern alloc_at_syscall
+    dq alloc_at_syscall
+    db 'alloc_at_syscall', 0
+
     extern bswap16
     dq bswap16
     db 'bswap16', 0
@@ -34,6 +42,14 @@ kernel_symbols_start:
     dq char_to_hex
     db 'char_to_hex', 0
 
+    extern clearResource
+    dq clearResource
+    db 'clearResource', 0
+
+    extern close_syscall
+    dq close_syscall
+    db 'close_syscall', 0
+
     extern cpuLocals
     dq cpuLocals
     db 'cpuLocals', 0
@@ -42,9 +58,29 @@ kernel_symbols_start:
     dq create_new_pml4
     db 'create_new_pml4', 0
 
+    extern create_opengl_context
+    dq create_opengl_context
+    db 'create_opengl_context', 0
+
+    extern create_opengl_object
+    dq create_opengl_object
+    db 'create_opengl_object', 0
+
+    extern create_shader
+    dq create_shader
+    db 'create_shader', 0
+
+    extern create_simple_buffer
+    dq create_simple_buffer
+    db 'create_simple_buffer', 0
+
     extern debug_out_char
     dq debug_out_char
     db 'debug_out_char', 0
+
+    extern debug_syscall
+    dq debug_syscall
+    db 'debug_syscall', 0
 
     extern devfs_finddir
     dq devfs_finddir
@@ -70,6 +106,10 @@ kernel_symbols_start:
     dq displayString
     db 'displayString', 0
 
+    extern elf_load
+    dq elf_load
+    db 'elf_load', 0
+
     extern end_test_function
     dq end_test_function
     db 'end_test_function', 0
@@ -77,6 +117,14 @@ kernel_symbols_start:
     extern fontBitmap
     dq fontBitmap
     db 'fontBitmap', 0
+
+    extern fork_pml4
+    dq fork_pml4
+    db 'fork_pml4', 0
+
+    extern fork_syscall
+    dq fork_syscall
+    db 'fork_syscall', 0
 
     extern g_bootstrap_stack
     dq g_bootstrap_stack
@@ -94,6 +142,14 @@ kernel_symbols_start:
     dq gdt_load_tss
     db 'gdt_load_tss', 0
 
+    extern get_active_process
+    dq get_active_process
+    db 'get_active_process', 0
+
+    extern get_active_thread
+    dq get_active_thread
+    db 'get_active_thread', 0
+
     extern get_mountpoint
     dq get_mountpoint
     db 'get_mountpoint', 0
@@ -105,10 +161,6 @@ kernel_symbols_start:
     extern get_next_task
     dq get_next_task
     db 'get_next_task', 0
-
-    extern global_pmm_lock
-    dq global_pmm_lock
-    db 'global_pmm_lock', 0
 
     extern handlers
     dq handlers
@@ -174,6 +226,10 @@ kernel_symbols_start:
     dq initDevFS
     db 'initDevFS', 0
 
+    extern init_cpu_features
+    dq init_cpu_features
+    db 'init_cpu_features', 0
+
     extern initrd_finddir
     dq initrd_finddir
     db 'initrd_finddir', 0
@@ -209,6 +265,10 @@ kernel_symbols_start:
     extern ioapics
     dq ioapics
     db 'ioapics', 0
+
+    extern ioctl_syscall
+    dq ioctl_syscall
+    db 'ioctl_syscall', 0
 
     extern ipi_resched
     dq ipi_resched
@@ -1946,6 +2006,10 @@ kernel_symbols_start:
     dq memcpy
     db 'memcpy', 0
 
+    extern memcpy64
+    dq memcpy64
+    db 'memcpy64', 0
+
     extern memset
     dq memset
     db 'memset', 0
@@ -1970,6 +2034,10 @@ kernel_symbols_start:
     dq modules_init
     db 'modules_init', 0
 
+    extern open_syscall
+    dq open_syscall
+    db 'open_syscall', 0
+
     extern outb
     dq outb
     db 'outb', 0
@@ -1985,6 +2053,14 @@ kernel_symbols_start:
     extern parseTarInitrd
     dq parseTarInitrd
     db 'parseTarInitrd', 0
+
+    extern pci_enable_busmastering
+    dq pci_enable_busmastering
+    db 'pci_enable_busmastering', 0
+
+    extern pci_get_device_by_class_subclass
+    dq pci_get_device_by_class_subclass
+    db 'pci_get_device_by_class_subclass', 0
 
     extern pci_get_device_by_vendor
     dq pci_get_device_by_vendor
@@ -2086,6 +2162,10 @@ kernel_symbols_start:
     dq processors_count
     db 'processors_count', 0
 
+    extern read_syscall
+    dq read_syscall
+    db 'read_syscall', 0
+
     extern render_string
     dq render_string
     db 'render_string', 0
@@ -2098,9 +2178,17 @@ kernel_symbols_start:
     dq schedule
     db 'schedule', 0
 
+    extern schedulerLock
+    dq schedulerLock
+    db 'schedulerLock', 0
+
     extern scheduler_init
     dq scheduler_init
     db 'scheduler_init', 0
+
+    extern send_inline_write
+    dq send_inline_write
+    db 'send_inline_write', 0
 
     extern service_interrupt2
     dq service_interrupt2
@@ -2109,6 +2197,26 @@ kernel_symbols_start:
     extern service_interrupt3
     dq service_interrupt3
     db 'service_interrupt3', 0
+
+    extern set_framebuffer_state
+    dq set_framebuffer_state
+    db 'set_framebuffer_state', 0
+
+    extern set_streamout_targets
+    dq set_streamout_targets
+    db 'set_streamout_targets', 0
+
+    extern set_sub_ctx
+    dq set_sub_ctx
+    db 'set_sub_ctx', 0
+
+    extern set_vertex_buffers
+    dq set_vertex_buffers
+    db 'set_vertex_buffers', 0
+
+    extern set_viewport_state
+    dq set_viewport_state
+    db 'set_viewport_state', 0
 
     extern smp_check_ap_flag
     dq smp_check_ap_flag
@@ -2178,6 +2286,10 @@ kernel_symbols_start:
     dq strtoklist
     db 'strtoklist', 0
 
+    extern syscall_entry
+    dq syscall_entry
+    db 'syscall_entry', 0
+
     extern task_return_context
     dq task_return_context
     db 'task_return_context', 0
@@ -2193,6 +2305,10 @@ kernel_symbols_start:
     extern thread_main
     dq thread_main
     db 'thread_main', 0
+
+    extern totalThreads
+    dq totalThreads
+    db 'totalThreads', 0
 
     extern tree2array
     dq tree2array
@@ -2282,6 +2398,10 @@ kernel_symbols_start:
     dq vfs_write
     db 'vfs_write', 0
 
+    extern vmm_get_phys
+    dq vmm_get_phys
+    db 'vmm_get_phys', 0
+
     extern vmm_init
     dq vmm_init
     db 'vmm_init', 0
@@ -2301,5 +2421,9 @@ kernel_symbols_start:
     extern vmm_unmap_pages_huge
     dq vmm_unmap_pages_huge
     db 'vmm_unmap_pages_huge', 0
+
+    extern write_syscall
+    dq write_syscall
+    db 'write_syscall', 0
 global kernel_symbols_end
 kernel_symbols_end: ;

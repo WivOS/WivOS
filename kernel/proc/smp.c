@@ -30,9 +30,64 @@ struct stack_t {
 static struct stack_t cpuStacks[128] __attribute__((aligned(PAGE_SIZE)));
 static struct tss_t cpuTss[128] __attribute__((aligned(16)));
 
+#define write_cr(reg, val) ({ \
+    asm volatile ("movq %0, %%cr" reg : : "r" (val)); \
+})
+
+#define read_cr(reg) ({ \
+    size_t cr; \
+    asm volatile ("movq %%cr" reg ", %0": "=r" (cr)); \
+    cr; \
+})
+
+static inline uint64_t rdmsr(uint32_t msr) {
+    uint32_t edx, eax;
+    asm volatile ("rdmsr"
+                  : "=a" (eax), "=d" (edx)
+                  : "c" (msr));
+    return ((uint64_t)edx << 32) | eax;
+}
+
+static inline void wrmsr(uint32_t msr, uint64_t value) {
+    uint32_t edx = value >> 32;
+    uint32_t eax = (uint32_t)value;
+    asm volatile ("wrmsr"
+                  :
+                  : "a" (eax), "d" (edx), "c" (msr));
+}
+
+extern void syscall_entry();
+
+void init_cpu_features() {
+    uint64_t cr0 = 0;
+    cr0 = read_cr("0");
+    cr0 &= ~(1 << 2);
+    cr0 |=  (1 << 1);
+    write_cr("0", cr0);
+
+    uint64_t cr4 = 0;
+    cr4 = read_cr("4");
+    cr4 |= (3 << 9);
+    write_cr("4", cr4);
+
+    uint64_t pat_msr = rdmsr(0x277);
+    pat_msr &= 0xffffffff;
+    pat_msr |= (uint64_t)0x0105 << 32;
+    wrmsr(0x277, pat_msr);
+
+    uint64_t efer = rdmsr(0xc0000080);
+    efer |= 1;
+    wrmsr(0xc0000080, efer);
+
+    wrmsr(0xc0000081, 0x0013000800000000);
+    wrmsr(0xc0000082, (uint64_t)syscall_entry);
+    wrmsr(0xc0000084, (uint64_t)~((uint32_t)0x002));
+}
+
 static void kernel_init_ap() {
     printf("[SMP] Started AP #%u\n", current_cpu);
 
+    init_cpu_features();
     lapic_enable();
 
     asm volatile("sti");
@@ -85,6 +140,7 @@ static void init_first_cpu() {
     struct tss_t *tss = &cpuTss[0];
 
     smp_init_cpu0_local(cpuLocal, tss);
+    init_cpu_features();
 }
 
 madt_t *madt;
