@@ -8,4 +8,5 @@ Then you will need to recompile qemu to use virglrenderer.
 ## Community
 
 If anyone wants to join the discord community server here is it:
+
 [Discord](https://discord.gg/r7j23A2tHG)
