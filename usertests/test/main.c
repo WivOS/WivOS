@@ -1072,7 +1072,7 @@ int main() {
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    /*const char *glslCode = 
+    const char *glslCode = 
     "#version 330 core\n"
     "layout (location = 0) in vec3 aPos;\n"
     "out vec4 vertexColor;\n"
@@ -1084,8 +1084,10 @@ int main() {
 
     //Time to implement some type of compiler
 
+#if 1
     bool running = true;
     char *currString = glslCode;
+    char **attributesVariableNames = malloc(16 * sizeof(char *));
     while(running) {
         if(!strncmp(currString, GLSL_TOKEN_VERSION, strlen(GLSL_TOKEN_VERSION))) {
             currString += strlen(GLSL_TOKEN_VERSION);
@@ -1103,19 +1105,153 @@ int main() {
                 currString++;
                 if(!strncmp(currString, "location", strlen("location"))) {
                     currString += strlen("location") + 3;
-                    printf("Found layout token, location = %x\n", currString[0] - '0');
+                    uint32_t location = currString[0] - '0';
+                    while(currString[0] != ')') currString++;
+                    currString++;
+                    
+                    char *tempName = NULL;
+                    char *variableName = NULL;
+                    while(true) {
+                        if(currString[0] != ' ' && currString[0] != '\n') {
+                            if(!strncmp(currString, "in", 2)) {
+                                currString += 3;
+                                continue;
+                            } else if(!strncmp(currString, "vec", 3)) {
+                                currString += 3 + 1 + 1;
+                                continue;
+                            } else if(currString[0] == ';') {
+                                variableName = malloc(currString - tempName);
+                                memcpy(variableName, tempName, currString - tempName);
+                                variableName[currString - tempName] = 0;
+                            } else { // Variable name
+                                if(tempName == NULL)
+                                    tempName = currString;
+                            }
+                        }
+                        if(currString[0] == '\n') {
+                            currString++;
+                            break;
+                        }
+                        currString++;
+                    }
+                    attributesVariableNames[location] = variableName;
+                    printf("Found layout token, location = %x, name = %s\n", location, variableName);
                 }
             } else {
                 printf("Error while compiling glsl to tgsi\n");
                 break;
             }
+        } else if(!strncmp(currString, GLSL_TOKEN_OUT, strlen(GLSL_TOKEN_OUT))) {
+            currString += strlen(GLSL_TOKEN_OUT) + 1;
+            if(!strncmp(currString, "vec", 3)) {
+                currString += 3;
+                uint32_t vecSize = currString[0] - '0'; currString += 2;
+                char *tempString = currString;
+                while(true) {
+                    if(currString[0] == '\n') {
+                        char *variableName = malloc(currString - tempString);
+                        memcpy(variableName, tempString, currString - tempString - 1); variableName[currString - tempString - 1] = 0;
+                        printf("New out vec%x variable named as: %s\n", vecSize, variableName);
+                        currString++;
+                        break;
+                    }
+                    currString++;
+                }
+            }
+        } else if(!strncmp(currString, GLSL_TOKEN_VOID, strlen(GLSL_TOKEN_VOID))) {
+            currString += strlen(GLSL_TOKEN_VOID) + 1;
+            if(!strncmp(currString, "main", 3)) {
+                while(currString[0] != '{') currString++;
+                currString++;
+
+                //Code block here
+                bool blockCode = true;
+                while(blockCode) {
+                    switch(currString[0]) {
+                        case '\n':
+                            currString++;
+                            break;
+                        case '}':
+                            currString++;
+                            blockCode = false;
+                            break;
+                        default:
+                            {
+                                if(!strncmp(currString, "gl_Position", 11)) {
+                                    currString += 11;
+                                } else {
+                                    for(uint32_t i = 0; i < 16; i++) { // TODO: Create a function for this
+                                        if(attributesVariableNames[i] && !strncmp(currString, attributesVariableNames[i], strlen(attributesVariableNames[i]))) {
+                                            //We have a variable that we know
+                                            while(*currString != '=') currString++; // Skip until equal
+                                            currString++;
+
+                                            while(*currString == ' ') currString++; // Skip until a new character non empty
+
+                                            // Parse code block
+                                            bool blockCode2 = true;
+                                            while(blockCode) {
+                                                switch(currString[0]) {
+                                                    case '\n':
+                                                        currString++;
+                                                        break;
+                                                    case '}':
+                                                        currString++;
+                                                        blockCode = false;
+                                                        break;
+                                                    default:
+                                                        {
+                                                            if(!strncmp(currString, "vec", 3)) {
+                                                                currString += 3;
+                                                                uint32_t vecSize = currString[0] - '0'; currString++;
+                                                                
+                                                                while(*currString != '(') currString++;
+                                                                currString++;
+
+                                                                //Parse the vector Ex: vec3 -> [(variable.xy, number), (variable.x, number, number), ...]
+                                                                for(uint32_t j = 0; j < vecSize; j++) {
+                                                                    switch(*currString) {
+                                                                        case '0': case '1': case '2': case '3': case '4': case '5': case '6': case '7': case '8': case '9':
+                                                                            //Parse the float
+                                                                            break;
+
+                                                                        default:
+                                                                            //Variable: save it, check size, and add the size to index j, if greater than or equal to vecSize -> syntax error
+                                                                            break;
+                                                                    }
+                                                                }
+                                                            } else {
+                                                                printf("%c\n", currString[0]);
+                                                                currString++;
+                                                            }
+                                                        }
+                                                        break;
+                                                }
+                                            }
+                                        }
+                                    }
+                                    printf("%c\n", currString[0]);
+                                    currString++;
+                                }
+                            }
+                            break;
+                    }
+                }
+            } else {
+
+            }
+        } else if(currString[0] == '\n' || currString[0] == ' ') {
+            currString++;
+        } else if(currString[0] == 0) {
+            running = false;
         } else {
-            printf("Error while compiling glsl to tgsi\n");
+            printf("Error while compiling glsl to tgsi:\n%x\n", currString[0]);
             running = false;
         }
     }
 
-    while(1);*/
+    while(1);
+#endif
 
 #ifdef DONT_USE_EBO
     GLuint VBO;

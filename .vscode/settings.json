@@ -1,0 +1,7 @@
+{
+    "twitchChat.oauth": "qvwzys2jowy7kkvx6l6785oevvghw2",
+    "twitchChat.username": "StartForKiller",
+    "twitchChat.channel": "startforkiller",
+    // Optional: Set the amount of chatmessages that are shown
+    "twitchChat.historysize": 20
+}
