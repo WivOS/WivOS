@@ -6,6 +6,8 @@ int printf(const char* format, ...);
 #include "../../modules/virtiogpu/virtiogpu.h"
 #include <stddef.h>
 #include "gl.h"
+#include "../../kernel/fs/vfs.h"
+#include "opengl.h"
 
 uint8_t fontBitmap[];
 
@@ -33,6 +35,14 @@ size_t fread(size_t fd, void *buffer, size_t count) {
     return ret;
 }
 
+size_t fseek(size_t fd, size_t offset, size_t type) {
+    size_t ret;
+
+    asm volatile("syscall" : "=a"(ret) : "D"(fd), "S"(offset), "d"(type), "a"(0x8) : "rcx", "r11");
+
+    return ret;
+}
+
 size_t ioctl(size_t fd, size_t request, void *argp) {
     size_t ret;
 
@@ -44,7 +54,7 @@ size_t ioctl(size_t fd, size_t request, void *argp) {
 void *currentAddr = NULL;
 
 void *sbrk(size_t count) {
-    if((int64_t)count <= 0) {
+    if((int64_t)count < 0) {
         return currentAddr;
     }
 
@@ -105,122 +115,124 @@ char *strcat(char *dest, const char *src)
     return rdest;
 }
 
-typedef char ALIGN[16];
-
-union header {
-	struct {
-		size_t size;
-		unsigned is_free;
-		union header *next;
-	} s;
-	ALIGN stub;
+struct block_meta {
+    size_t size;
+    struct block_meta *next;
+    int free;
+    int magic; // For debugging only. TODO: remove this in non-debug mode.
+    uint8_t pad[4072]; // For opengl we need fixed address, maybe we need to implement valloc
 };
-typedef union header header_t;
 
-header_t *head, *tail;
+#define META_SIZE sizeof(struct block_meta)
 
-header_t *get_free_block(size_t size)
-{
-	header_t *curr = head;
-	while(curr) {
-		if (curr->s.is_free && curr->s.size >= size)
-			return curr;
-		curr = curr->s.next;
-	}
-	return NULL;
+void *global_base = NULL;
+
+struct block_meta *find_free_block(struct block_meta **last, size_t size) {
+    struct block_meta *current = global_base;
+    while (current && !(current->free && current->size >= size)) {
+        *last = current;
+        current = current->next;
+    }
+    return current;
 }
 
-void *malloc(size_t size)
-{
-	size_t total_size;
-	void *block;
-	header_t *header;
-	if (!size)
-		return NULL;
-	header = get_free_block(size);
-	if (header) {
-		header->s.is_free = 0;
-		return (void*)(header + 1);
-	}
-	total_size = sizeof(header_t) + size;
-	block = sbrk(total_size);
-	if (block == (void*) -1) {
-		return NULL;
-	}
-	header = block;
-	header->s.size = size;
-	header->s.is_free = 0;
-	header->s.next = NULL;
-	if (!head)
-		head = header;
-	if (tail)
-		tail->s.next = header;
-	tail = header;
-	return (void*)(header + 1);
+struct block_meta *request_space(struct block_meta* last, size_t size) {
+    struct block_meta *block;
+    block = sbrk(0);
+    void *request = sbrk(size + META_SIZE);
+    if(!((void*)block == request)) while(1); // Not thread safe.
+    if (request == (void*) -1) {
+        return NULL; // sbrk failed.
+    }
+
+    if (last) { // NULL on first request.
+        last->next = block;
+    }
+    block->size = size;
+    block->next = NULL;
+    block->free = 0;
+    block->magic = 0x12345678;
+    return block;
 }
 
-void free(void *block)
-{
-	header_t *header, *tmp;
-	void *programbreak;
-
-	if (!block)
-		return;
-	header = (header_t*)block - 1;
-
-	programbreak = sbrk(0);
-	if ((char*)block + header->s.size == programbreak) {
-		if (head == tail) {
-			head = tail = NULL;
-		} else {
-			tmp = head;
-			while (tmp) {
-				if(tmp->s.next == tail) {
-					tmp->s.next = NULL;
-					tail = tmp;
-				}
-				tmp = tmp->s.next;
-			}
-		}
-		//sbrk(0 - sizeof(header_t) - header->s.size);
-		return;
-	}
-	header->s.is_free = 1;
+struct block_meta *get_block_ptr(void *ptr) {
+    return (struct block_meta*)ptr - 1;
 }
 
-void *calloc(size_t num, size_t nsize)
-{
-	size_t size;
-	void *block;
-	if (!num || !nsize)
-		return NULL;
-	size = num * nsize;
-	/* check mul overflow */
-	if (nsize != size / num)
-		return NULL;
-	block = malloc(size);
-	if (!block)
-		return NULL;
-	memset(block, 0, size);
-	return block;
+void *malloc(size_t size) {
+    struct block_meta *block;
+    // TODO: align size?
+
+    if (size <= 0) {
+        return NULL;
+    }
+
+    if (!global_base) { // First call.
+        block = request_space(NULL, size);
+        if (!block) {
+        return NULL;
+        }
+        global_base = block;
+    } else {
+        struct block_meta *last = global_base;
+        block = find_free_block(&last, size);
+        if (!block) { // Failed to find free block.
+        block = request_space(last, size);
+        if (!block) {
+            return NULL;
+        }
+        } else {      // Found free block
+        // TODO: consider splitting block here.
+        block->free = 0;
+        block->magic = 0x77777777;
+        }
+    }
+
+    return(block+1);
 }
 
-void *realloc(void *block, size_t size)
-{
-	header_t *header;
-	void *ret;
-	if (!block || !size)
-		return malloc(size);
-	header = (header_t*)block - 1;
-	if (header->s.size >= size)
-		return block;
-	ret = malloc(size);
-	if (ret) {
-		
-		memcpy(ret, block, header->s.size);
-		free(block);
-	}
-	return ret;
+void free(void *ptr) {
+    if (!ptr) {
+        return;
+    }
+
+    // TODO: consider merging blocks once splitting blocks is implemented.
+    struct block_meta* block_ptr = get_block_ptr(ptr);
+    if(block_ptr->free != 0) while(1);
+    if(!(block_ptr->magic == 0x77777777 || block_ptr->magic == 0x12345678)) while(1);
+    block_ptr->free = 1;
+    block_ptr->magic = 0x55555555;
+}
+
+void *calloc(size_t nelem, size_t elsize) {
+    size_t size = nelem * elsize; // TODO: check for overflow.
+    void *ptr = malloc(size);
+    memset(ptr, 0, size);
+    return ptr;
+}
+
+void *realloc(void *ptr, size_t size) {
+    if (!ptr) {
+        // NULL ptr. realloc should act like malloc.
+        return malloc(size);
+    }
+
+    struct block_meta* block_ptr = get_block_ptr(ptr);
+    if (block_ptr->size >= size) {
+        // We have enough space. Could free some once we implement split.
+        return ptr;
+    }
+
+    // Need to really realloc. Malloc new space and free old space.
+    // Then copy old data to new space.
+    void *new_ptr;
+    new_ptr = malloc(size);
+    if (!new_ptr) {
+        return NULL; // TODO: set errno on failure.
+    }
+    memcpy(new_ptr, ptr, block_ptr->size);
+    free(ptr);
+    return new_ptr;
 }
 
 void *memcpy(void *d, const void *s, size_t n) {
@@ -290,39 +302,46 @@ int strncmp(const char *s1, const char *s2, int c) {
     return 0;
 }
 
+static inline bool _is_digit(char ch)
+{
+    return (ch >= '0') && (ch <= '9');
+}
+
+float strtof(const char* str) {
+    float res = 0.0F;
+    char *ptr = (char*)str;
+    bool afterDecimalPoint = false;
+    float div = 1;
+    bool negative = false;
+
+    while (*ptr != '\0') {
+        if(*ptr == '-' && !negative) {
+            negative = true;
+        }
+        else if (_is_digit(*ptr)) {
+            if (!afterDecimalPoint) {
+                res *= 10;
+                res += *ptr - '0';
+            }
+            else {
+                div *= 10;
+                res += (float)(*ptr - '0') / div;
+            }
+        }
+        else if (*ptr == '.') {
+            afterDecimalPoint = true;
+        }
+        else {
+            break;
+        }
+        
+        ptr++;
+    }
+    
+    return negative ? -res : res;
+}
+
 static volatile uint32_t currOpenglResource = 1;
-
-static void set_sub_ctx(size_t gpuNode, uint32_t contextResourceID) {
-    virtgpu_3d_command_t command = {0};
-
-    command.command = VIRGL_CCMD_SET_SUB_CTX;
-    command.option = 0;
-    command.length = 1;
-    command.parameters = (uint32_t *)realloc(command.parameters, sizeof(uint32_t) * 1);
-    command.parameters[0] = contextResourceID; // ctx id
-
-    ioctl(gpuNode, VIRTGPU_IOCTL_ADD_3D_COMMAND_TO_QUEUE, &command);
-
-    free(command.parameters);
-}
-
-static uint32_t create_opengl_context(size_t gpuNode) {
-    virtgpu_3d_command_t command = {0};
-
-    uint32_t contextResourceID = currOpenglResource++;
-
-    command.command = VIRGL_CCMD_CREATE_SUB_CTX;
-    command.option = 0;
-    command.length = 1;
-    command.parameters = (uint32_t *)realloc(command.parameters, sizeof(uint32_t) * 1);
-    command.parameters[0] = contextResourceID; // ctx id
-
-    ioctl(gpuNode, VIRTGPU_IOCTL_ADD_3D_COMMAND_TO_QUEUE, &command);
-
-    free(command.parameters);
-
-    return contextResourceID;
-}
 
 
 //TODO: Check every type
@@ -358,44 +377,6 @@ static uint32_t create_opengl_object(size_t gpuNode, uint32_t objectType, uint32
     free(command.parameters);
 
     return objectResourceID;
-}
-
-static void set_framebuffer_state(size_t gpuNode, uint32_t depthBuffer, uint32_t *surfaces, size_t count) {
-    virtgpu_3d_command_t command = {0};
-
-    command.command = VIRGL_CCMD_SET_FRAMEBUFFER_STATE;
-    command.option = 0;
-    command.length = 3;
-    command.parameters = (uint32_t *)realloc(command.parameters, sizeof(uint32_t) * 3);
-    command.parameters[0] = count;
-    command.parameters[1] = depthBuffer;
-    for(size_t i = 0; i < count; i++) {
-        command.parameters[2 + i] = surfaces[i];
-    }
-
-    ioctl(gpuNode, VIRTGPU_IOCTL_ADD_3D_COMMAND_TO_QUEUE, &command);
-
-    free(command.parameters);
-}
-
-static void clearResource(size_t gpuNode, float red, float green, float blue, float alpha, double depth, uint32_t stencil, uint32_t clearFlags) {
-    virtgpu_3d_command_t command = {0};
-
-    command.command = VIRGL_CCMD_CLEAR;
-    command.option = 0;
-    command.length = 8;
-    command.parameters = (uint32_t *)realloc(command.parameters, sizeof(uint32_t) * 8);
-    command.parameters[0] = clearFlags; //(1 << 2);
-    *((float *)&command.parameters[1]) = red;
-    *((float *)&command.parameters[2]) = green;
-    *((float *)&command.parameters[3]) = blue;
-    *((float *)&command.parameters[4]) = alpha;
-    *((double *)&command.parameters[5]) = depth;
-    command.parameters[7] = stencil;
-
-    ioctl(gpuNode, VIRTGPU_IOCTL_ADD_3D_COMMAND_TO_QUEUE, &command);
-
-    free(command.parameters);
 }
 
 static uint32_t create_simple_buffer(size_t gpuNode, uint32_t width, uint32_t bind, uint32_t **buffer) {
@@ -543,22 +524,6 @@ static void send_inline_write(size_t gpuNode, uint32_t resourceID, uint32_t leve
     free(command.parameters);
 }
 
-static void set_vertex_buffers(size_t gpuNode, uint32_t stride, uint32_t bufferOffset, uint32_t resourceID) {
-    virtgpu_3d_command_t command = {0};
-
-    command.command = VIRGL_CCMD_SET_VERTEX_BUFFERS;
-    command.option = 0;
-    command.length = 3;
-    command.parameters = (uint32_t *)realloc(command.parameters, sizeof(uint32_t) * 3);
-    command.parameters[0] = stride; // Stride
-    command.parameters[1] = bufferOffset; // Buffer Offset
-    command.parameters[2] = resourceID; // Ve id
-
-    ioctl(gpuNode, VIRTGPU_IOCTL_ADD_3D_COMMAND_TO_QUEUE, &command);
-
-    free(command.parameters);
-}
-
 static void set_streamout_targets(size_t gpuNode, uint32_t bitmask, uint32_t streamoutID) {
     virtgpu_3d_command_t command = {0};
 
@@ -607,192 +572,20 @@ static uint32_t create_shader(size_t gpuNode, const char *tgsiAssembly, uint32_t
     return shaderID;
 }
 
-static void set_viewport_state(size_t gpuNode, uint32_t offset, float stateA, float stateB, float stateC, float translateA, float translateB, float translateC) {
-    virtgpu_3d_command_t command = {0};
-
-    command.command = VIRGL_CCMD_SET_VIEWPORT_STATE;
-    command.option = 0;
-    command.length = 7;
-    command.parameters = (uint32_t *)realloc(command.parameters, sizeof(uint32_t) * 7);
-    command.parameters[0] = offset; // Offset
-    memcpy((void *)&command.parameters[1], &stateA, sizeof(float));
-    memcpy((void *)&command.parameters[2], &stateB, sizeof(float));
-    memcpy((void *)&command.parameters[3], &stateC, sizeof(float));
-    memcpy((void *)&command.parameters[4], &translateA, sizeof(float));
-    memcpy((void *)&command.parameters[5], &translateB, sizeof(float));
-    memcpy((void *)&command.parameters[6], &translateC, sizeof(float));
-
-    ioctl(gpuNode, VIRTGPU_IOCTL_ADD_3D_COMMAND_TO_QUEUE, &command);
-
-    free(command.parameters);
-}
-
-//TODO: Create the structure
-static void draw_vbo(size_t gpuNode, uint32_t start, uint32_t count, uint32_t mode) {
-    virtgpu_3d_command_t command = {0};
-
-    command.command = VIRGL_CCMD_DRAW_VBO;
-    command.option = 0;
-    command.length = 12;
-    command.parameters = (uint32_t *)realloc(command.parameters, sizeof(uint32_t) * 12);
-    command.parameters[0] = start; // Start
-    command.parameters[1] = count; // Count
-    command.parameters[2] = mode; // Mode PIPE_PRIM_TRIANGLES
-    command.parameters[3] = 0; // Indexed
-    command.parameters[4] = 0; // Instace Count
-    command.parameters[5] = 0; // Index Bias
-    command.parameters[6] = 0; // Start Instance
-    command.parameters[7] = 0; // Primitive Restart
-    command.parameters[8] = 0; // Restart Index
-    command.parameters[9] = 0; // Min Index
-    command.parameters[10] = 0; // Max Index
-    command.parameters[11] = 0; // Cso
-
-    ioctl(gpuNode, VIRTGPU_IOCTL_ADD_3D_COMMAND_TO_QUEUE, &command);
-}
-
 struct vertex {
    float position[4];
    float color[4];
 };
 
-static struct vertex vertices[12 * 3] =
-{
-   {
-      { -1.0f, -1.0f, -1.0f, 1.0f },
-      { 0.583f,  0.771f,  0.014f, 1.0f }
-   },
-   {
-      { -1.0f, -1.0f, 1.0f, 1.0f },
-      { 0.609f,  0.115f,  0.436f, 1.0f }
-   },
-   {
-      { -1.0f, 1.0f, 1.0f, 1.0f },
-      { 0.327f,  0.483f,  0.844f, 1.0f }
-   },
-   {
-      { 1.0f, 1.0f, -1.0f, 1.0f },
-      { 0.822f,  0.569f,  0.201f, 1.0f }
-   },
-   {
-      { -1.0f, -1.0f, -1.0f, 1.0f },
-      { 0.435f,  0.602f,  0.223f, 1.0f }
-   },
-   {
-      { -1.0f, 1.0f, -1.0f, 1.0f },
-      { 0.310f,  0.747f,  0.185f, 1.0f }
-   },
-
-   {
-      { 1.0f, -1.0f, 1.0f, 1.0f },
-      { 0.597f,  0.770f,  0.761f, 1.0f }
-   },
-   {
-      { -1.0f, -1.0f, -1.0f, 1.0f },
-      { 0.559f,  0.436f,  0.730f, 1.0f }
-   },
-   {
-      { 1.0f, -1.0f, -1.0f, 1.0f },
-      { 0.359f,  0.583f,  0.152f, 1.0f }
-   },
-
-   {
-      { 1.0f, 1.0f, -1.0f, 1.0f },
-      { 0.483f,  0.596f,  0.789f, 1.0f }
-   },
-   {
-      { 1.0f, -1.0f, -1.0f, 1.0f },
-      { 0.559f,  0.861f,  0.639f, 1.0f }
-   },
-   {
-      { -1.0f, -1.0f, -1.0f, 1.0f },
-      { 0.195f,  0.548f,  0.859f, 1.0f }
-   },
-
-   {
-      {-1.0f,-1.0f,-1.0f,  1.0f},
-      {0.014f,  0.184f,  0.576f, 1.0f}
-   },
-
-  {{ -1.0f, 1.0f, 1.0f, 1.0f,},
-  {0.771f,  0.328f,  0.970f, 1.0f}},
-
-  {{ -1.0f, 1.0f,-1.0f, 1.0f,},
-  {0.406f,  0.615f,  0.116f, 1.0f}},
-
-  {{ 1.0f,-1.0f, 1.0f,  1.0f,},
-  {0.676f,  0.977f,  0.133f, 1.0f}},
-
-  {{ -1.0f,-1.0f, 1.0f, 1.0f,},
-  {0.971f,  0.572f,  0.833f, 1.0f}},
-
-  {{ -1.0f,-1.0f,-1.0f, 1.0f,},
-  {0.140f,  0.616f,  0.489f, 1.0f}},
-
-  {{ -1.0f, 1.0f, 1.0f, 1.0f,},
-  {0.997f,  0.513f,  0.064f, 1.0f}},
-
-  {{ -1.0f,-1.0f, 1.0f, 1.0f,},
-  {0.945f,  0.719f,  0.592f, 1.0f}},
-
-  {{ 1.0f,-1.0f, 1.0f,  1.0f,},
-  {0.543f,  0.021f,  0.978f, 1.0f}},
-
-  {{ 1.0f, 1.0f, 1.0f,  1.0f,},
-  {0.279f,  0.317f,  0.505f, 1.0f}},
-
-  {{ 1.0f,-1.0f,-1.0f,  1.0f,},
-  {0.167f,  0.620f,  0.077f, 1.0f}},
-
-  {{ 1.0f, 1.0f,-1.0f,  1.0f,},
-  {0.347f,  0.857f,  0.137f, 1.0f}},
-
-  {{ 1.0f,-1.0f,-1.0f,  1.0f,},
-  {0.055f,  0.953f,  0.042f, 1.0f}},
-
-  {{ 1.0f, 1.0f, 1.0f,  1.0f,},
-  {0.714f,  0.505f,  0.345f, 1.0f}},
-
-  {{ 1.0f,-1.0f, 1.0f,  1.0f,},
-  {0.783f,  0.290f,  0.734f, 1.0f}},
-
-  {{ 1.0f, 1.0f, 1.0f,  1.0f,},
-  {0.722f,  0.645f,  0.174f, 1.0f}},
-
-  {{ 1.0f, 1.0f,-1.0f,  1.0f,},
-  {0.302f,  0.455f,  0.848f, 1.0f}},
-
-  {{ -1.0f, 1.0f,-1.0f, 1.0f,},
-  {0.225f,  0.587f,  0.040f, 1.0f}},
-
-  {{ 1.0f, 1.0f, 1.0f,  1.0f,},
-  {0.517f,  0.713f,  0.338f, 1.0f}},
-
-  {{ -1.0f, 1.0f,-1.0f, 1.0f,},
-  {0.053f,  0.959f,  0.120f, 1.0f}},
-
-  {{ -1.0f, 1.0f, 1.0f, 1.0f,},
-  {0.393f,  0.621f,  0.362f, 1.0f}},
-
-  {{ 1.0f, 1.0f, 1.0f,  1.0f,},
-  {0.673f,  0.211f,  0.457f, 1.0f}},
-
-  {{ -1.0f, 1.0f, 1.0f, 1.0f,},
-  {0.820f,  0.883f,  0.371f, 1.0f}},
-
-  {{ 1.0f,-1.0f, 1.0f,   1.0f},
-  {0.982f,  0.099f,  0.879f, 1.0f}},
-};
-
 #define FORCE_EVAL(x) do {                        \
 	if (sizeof(x) == sizeof(float)) {         \
-		volatile float __x;               \
+		volatile float __attribute__((unused)) __x;               \
 		__x = (x);                        \
 	} else if (sizeof(x) == sizeof(double)) { \
-		volatile double __x;              \
+		volatile double __attribute__((unused)) __x;              \
 		__x = (x);                        \
 	} else {                                  \
-		volatile long double __x;         \
+		volatile long double __attribute__((unused)) __x;         \
 		__x = (x);                        \
 	}                                         \
 } while(0)
@@ -875,61 +668,6 @@ float constants[] =
     0, 0, 0, 1
 };
 
-static struct vertex vertices2[8] = {
-    {
-        {-1.0f, -1.0f, 1.0f, 1.0f},
-        {0.609f,  0.115f,  0.436f, 1.0f}
-    },
-    {
-        { 1.0f, -1.0f, 1.0f, 1.0f},
-        {0.597f,  0.770f,  0.761f, 1.0f}
-    },  // bottom right
-    {
-        {1.0f, 1.0f, 1.0f, 1.0f},
-        {0.279f,  0.317f,  0.505f, 1.0f}
-    },  // bottom left
-    {
-        {-1.0f,  1.0f, 1.0f, 1.0f},
-        {0.327f,  0.483f,  0.844f, 1.0f}
-    },  // top left 
-
-    {
-        {-1.0f, -1.0f, -1.0f, 1.0f},
-        {0.583f,  0.771f,  0.014f, 1.0f}
-    },
-    {
-        { 1.0f, -1.0f, -1.0f, 1.0f},
-        {0.559f,  0.861f,  0.639f, 1.0f}
-    },  // bottom right
-    {
-        { 1.0f,  1.0f, -1.0f, 1.0f},
-        {0.347f,  0.857f,  0.137f, 1.0f}
-    },  // bottom left
-    {
-        {-1.0f,  1.0f, -1.0f, 1.0f},
-        {0.310f,  0.747f,  0.185f, 1.0f}
-    },  // top left 
-};
-unsigned int indices[] = {  // note that we start from 0!
-    0, 2, 1,
-    0, 3, 2,
-
-    4, 6, 5,
-    4, 7, 6,
-
-    4, 0, 3,
-    4, 3, 7,
-
-    1, 6, 5,
-    1, 2, 6,
-
-    3, 6, 2,
-    3, 7, 6,
-
-    1, 0, 4,
-    1, 4, 5
-}; 
-
 union fi {
    float f;
    int32_t i;
@@ -949,8 +687,6 @@ uint8_t tex2d[16][16][4];
 #define MIN2( A, B )   ( (A)<(B) ? (A) : (B) )
 
 extern void windows_flush();
-
-#include "opengl.h"
 
 //#define DONT_USE_EBO
 
@@ -977,8 +713,6 @@ int main() {
 
     debug_print("Hello world\n");
     debug_print("Hello userland world\n");
-
-    printf("%lx\n", (size_t)&vertices);
 
     size_t fd = fopen("/hola.txt", 0);
     if(fd == -1) return -1;
@@ -1082,9 +816,87 @@ int main() {
     "}\n"
     "\n";
 
+    size_t object = fopen("/teapot.obj", 0);
+
+    struct vertex *vertexList = malloc(sizeof(struct vertex) * 100);
+    size_t vertexCount = 0;
+    uint32_t *indexList = malloc(sizeof(uint32_t) * 300);
+    size_t indexCount = 0;
+
+    size_t objectSize = fseek(object, 0, SEEK_END);
+    fseek(object, 0, SEEK_SET);
+
+    char *strBuffer = malloc(objectSize);
+    fread(object, strBuffer, objectSize);
+    char *tempBuffer2 = strBuffer;
+
+    while(true) {
+        switch(*strBuffer) {
+            case '#': case 'o': case 's': case '\n': case ' ':
+                {
+                    while(*strBuffer != '\n') strBuffer++;
+                    strBuffer++;
+                }
+                break;
+            case 'v':
+                {
+                    strBuffer += 2;
+                    float v1 = strtof(strBuffer);
+                    while(*strBuffer != ' ') strBuffer++;
+                    strBuffer++;
+                    float v2 = strtof(strBuffer);
+                    while(*strBuffer != ' ') strBuffer++;
+                    strBuffer++;
+                    float v3 = strtof(strBuffer);
+                    while(*strBuffer != '\n') strBuffer++;
+                    strBuffer++;
+                    vertexList = realloc(vertexList, (vertexCount + 1) * sizeof(struct vertex));
+                    //printf("Vertex: %ld %ld, %ld, %ld\n", vertexCount, (int64_t)v1, (int64_t)v2, (int64_t)v3);
+                    vertexList[vertexCount].position[0] = v1;
+                    vertexList[vertexCount].position[1] = v2;
+                    vertexList[vertexCount].position[2] = v3;
+                    vertexList[vertexCount].position[3] = 1.0f;
+                    
+                    float totally = ((v1 > 0 ? v1 : -v1) + (v2 > 0 ? v2 : -v2) + (v3 > 0 ? v3 : -v3));
+                    float v1percent = (v1 > 0 ? v1 : -v1) / totally;
+                    float v2percent = (v2 > 0 ? v2 : -v2) / totally;
+                    float v3percent = (v3 > 0 ? v3 : -v3) / totally;
+
+                    vertexList[vertexCount].color[0] = v1percent; //(v1 > half) ? 1.0f : 0.0f;
+                    vertexList[vertexCount].color[1] = v2percent; //(v2 > half) ? 1.0f : 0.0f;
+                    vertexList[vertexCount].color[2] = v3percent; //(v3 > half) ? 1.0f : 0.0f;
+                    vertexList[vertexCount].color[3] = 1.0f;
+                    vertexCount++;
+                }
+                break;
+            case 'f':
+                {
+                    strBuffer += 2;
+                    uint32_t f1 = strtof(strBuffer);
+                    while(*strBuffer != ' ') strBuffer++;
+                    strBuffer++;
+                    uint32_t f2 = strtof(strBuffer);
+                    while(*strBuffer != ' ') strBuffer++;
+                    strBuffer++;
+                    uint32_t f3 = strtof(strBuffer);
+                    while(*strBuffer != '\n') strBuffer++;
+                    strBuffer++;
+                    indexList = realloc(indexList, (indexCount + 1) * 3 * sizeof(uint32_t));
+                    //printf("Triangle: %ld %d, %d, %d\n", indexCount, (uint32_t)f1, (uint32_t)f2, (uint32_t)f3);
+                    indexList[(indexCount * 3) + 0] = f1 - 1;
+                    indexList[(indexCount * 3) + 1] = f2 - 1;
+                    indexList[(indexCount * 3) + 2] = f3 - 1;
+                    indexCount++;
+                }
+                break;
+        }
+        if(*strBuffer == 0 || strBuffer >= (tempBuffer2 + objectSize)) break;
+    }
+    printf("%lx %lx\n", vertexList, indexList);
+
     //Time to implement some type of compiler
 
-#if 1
+#if 0 // Totally garbage, implement a lexer in lex and a parser in yacc
     bool running = true;
     char *currString = glslCode;
     char **attributesVariableNames = malloc(16 * sizeof(char *));
@@ -1253,23 +1065,16 @@ int main() {
     while(1);
 #endif
 
-#ifdef DONT_USE_EBO
     GLuint VBO;
     glGenBuffers(1, &VBO);
     glBindBuffer(GL_ARRAY_BUFFER, VBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), &vertices, GL_STATIC_DRAW);
-#else
-    GLuint VBO;
-    glGenBuffers(1, &VBO);
-    glBindBuffer(GL_ARRAY_BUFFER, VBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices2), &vertices2, GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(struct vertex) * vertexCount, vertexList, GL_STATIC_DRAW);
 
 //TODO
     GLuint EBO;
     glGenBuffers(1, &EBO);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
-#endif
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(uint32_t) * 3 * indexCount, indexList, GL_STATIC_DRAW);
 
     GLuint VAO;
     glGenVertexArrays(1, &VAO);
@@ -1468,12 +1273,8 @@ int main() {
 
     ioctl(gpuNode, VIRTGPU_IOCTL_ADD_3D_COMMAND_TO_QUEUE, &command);
 
-#ifdef DONT_USE_EBO
-    glDrawArrays(GL_TRIANGLES, 0, 12 * 3);
-#else
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
-    glDrawElements(GL_TRIANGLES, (sizeof(indices) / sizeof(uint32_t)) * 3, GL_UNSIGNED_INT, 0);
-#endif
+    glDrawElements(GL_TRIANGLES, indexCount, GL_UNSIGNED_INT, 0);
 
     windows_flush();
 
@@ -1510,12 +1311,9 @@ int main() {
             sizeof(constants), 1, 1
         }, &constants, sizeof(constants), 0, 0);
 
-#ifdef DONT_USE_EBO
-        glDrawArrays(GL_TRIANGLES, 0, 12 * 3);
-#else
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
-        glDrawElements(GL_TRIANGLES, (sizeof(indices) / sizeof(uint32_t)) * 3, GL_UNSIGNED_INT, 0);
-#endif
+        glDrawElements(GL_TRIANGLES, indexCount * 3, GL_UNSIGNED_INT, 0);
+
         windows_flush();
 
         /*draw_vbo(gpuNode, 0, 12 * 3, 4);
@@ -1534,12 +1332,71 @@ int main() {
 
 typedef void (*out_fct_type)(char character, void* buffer, size_t idx, size_t maxlen);
 
-static inline bool _is_digit(char ch)
-{
-    return (ch >= '0') && (ch <= '9');
+char* __int_str(uint64_t i, char b[], int base, bool plusSignIfNeeded, bool spaceSignIfNeeded,
+                int paddingNo, bool justify, bool zeroPad) {
+ 
+    char digit[32] = {0};
+    memset(digit, 0, 32);
+    strcpy(digit, "0123456789");
+ 
+    if (base == 16) {
+        strcat(digit, "ABCDEF");
+    } else if (base == 17) {
+        strcat(digit, "abcdef");
+        base = 16;
+    }
+ 
+    char* p = b;
+    if (i < 0) {
+        *p++ = '-';
+        i *= -1;
+    } else if (plusSignIfNeeded) {
+        *p++ = '+';
+    } else if (!plusSignIfNeeded && spaceSignIfNeeded) {
+        *p++ = ' ';
+    }
+ 
+    uint64_t shifter = i;
+    do {
+        ++p;
+        shifter = shifter / base;
+    } while (shifter);
+ 
+    *p = '\0';
+    do {
+        *--p = digit[i % base];
+        i = i / base;
+    } while (i);
+ 
+    int padding = paddingNo - (int)strlen(b);
+    if (padding < 0) padding = 0;
+ 
+    if (justify) {
+        while (padding--) {
+            if (zeroPad) {
+                b[strlen(b)] = '0';
+            } else {
+                b[strlen(b)] = ' ';
+            }
+        }
+ 
+    } else {
+        char a[256] = {0};
+        while (padding--) {
+            if (zeroPad) {
+                a[strlen(a)] = '0';
+            } else {
+                a[strlen(a)] = ' ';
+            }
+        }
+        strcat(a, b);
+        strcpy(b, a);
+    }
+ 
+    return b;
 }
 
-char* __int_str(uint64_t i, char b[], int base, bool plusSignIfNeeded, bool spaceSignIfNeeded,
+char* __int_str2(int64_t i, char b[], int base, bool plusSignIfNeeded, bool spaceSignIfNeeded,
                 int paddingNo, bool justify, bool zeroPad) {
  
     char digit[32] = {0};
@@ -1815,56 +1672,56 @@ int _vsnprintf(out_fct_type out, char* buffer, const size_t maxlen, const char* 
                     case 0:
                     {
                         int integer = va_arg(list, int);
-                        __int_str(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify, zeroPad);
+                        __int_str2(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify, zeroPad);
                         displayString(intStrBuffer, &chars, out, buffer, maxlen);
                         break;
                     }
                     case 'H':
                     {
                         signed char integer = (signed char) va_arg(list, int);
-                        __int_str(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify, zeroPad);
+                        __int_str2(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify, zeroPad);
                         displayString(intStrBuffer, &chars, out, buffer, maxlen);
                         break;
                     }
                     case 'h':
                     {
                         short int integer = va_arg(list, int);
-                        __int_str(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify, zeroPad);
+                        __int_str2(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify, zeroPad);
                         displayString(intStrBuffer, &chars, out, buffer, maxlen);
                         break;
                     }
                     case 'l':
                     {
                         long integer = va_arg(list, long);
-                        __int_str(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify, zeroPad);
+                        __int_str2(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify, zeroPad);
                         displayString(intStrBuffer, &chars, out, buffer, maxlen);
                         break;
                     }
                     case 'q':
                     {
                         long long integer = va_arg(list, long long);
-                        __int_str(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify, zeroPad);
+                        __int_str2(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify, zeroPad);
                         displayString(intStrBuffer, &chars, out, buffer, maxlen);
                         break;
                     }
                     case 'j':
                     {
                         intmax_t integer = va_arg(list, intmax_t);
-                        __int_str(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify, zeroPad);
+                        __int_str2(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify, zeroPad);
                         displayString(intStrBuffer, &chars, out, buffer, maxlen);
                         break;
                     }
                     case 'z':
                     {
                         size_t integer = va_arg(list, size_t);
-                        __int_str(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify, zeroPad);
+                        __int_str2(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify, zeroPad);
                         displayString(intStrBuffer, &chars, out, buffer, maxlen);
                         break;
                     }
                     case 't':
                     {
                         ptrdiff_t integer = va_arg(list, ptrdiff_t);
-                        __int_str(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify, zeroPad);
+                        __int_str2(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify, zeroPad);
                         displayString(intStrBuffer, &chars, out, buffer, maxlen);
                         break;
                     }
@@ -1972,8 +1829,6 @@ int printf(const char* format, ...)
     debug_print(buffer);
     return ret;
 }
-
-#pragma once
 
 // Same data as the Linux kernel uses, extracted from the PC VGA font.
 uint8_t fontBitmap[] = {

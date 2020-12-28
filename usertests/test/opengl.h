@@ -17,7 +17,7 @@ typedef struct {
 
 typedef struct {
     uint8_t isDirt;
-    uint32_t enabledVertexAttribArrays;
+    volatile uint32_t enabledVertexAttribArrays;
     GLuint bufferObject;
     gl_attrib_object_t attribs[32];
 } gl_vertex_array_object_t;
@@ -34,6 +34,11 @@ typedef struct {
     gl_shader_object_t *geometryShader;
 } gl_program_object_t;
 
+typedef struct { // TODO: When we have more than two opengl contexts we needs this
+
+} gl_context_t;
+
+//TODO: Refactor
 #define GLSL_TOKEN_VERSION "#version"
 #define GLSL_TOKEN_LAYOUT "layout"
 #define GLSL_TOKEN_OUT "out"

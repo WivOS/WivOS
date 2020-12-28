@@ -1994,6 +1994,10 @@ kernel_symbols_start:
     dq lnode_destroy
     db 'lnode_destroy', 0
 
+    extern lseek_syscall
+    dq lseek_syscall
+    db 'lseek_syscall', 0
+
     extern madt
     dq madt
     db 'madt', 0

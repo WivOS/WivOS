@@ -256,6 +256,8 @@ syscall_table:
     dq alloc_at_syscall ; 0x6
     extern fork_syscall
     dq fork_syscall ; 0x7
+    extern lseek_syscall
+    dq lseek_syscall ; 0x8
     dq invalid_syscall
 .end:
 

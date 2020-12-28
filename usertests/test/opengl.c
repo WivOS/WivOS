@@ -720,7 +720,7 @@ GL_APICALL void GL_APIENTRY glDrawElements (GLenum mode, GLsizei count, GLenum t
 
         if(!enabled_vertex_attribs_count) return;
 
-        parameters = (uint32_t *)realloc(parameters, sizeof(uint32_t) * (4 * enabled_vertex_attribs_count));
+        parameters = (uint32_t *)calloc(1, sizeof(uint32_t) * (4 * enabled_vertex_attribs_count));
 
         size_t currentIndex = 0;
         for(currentIndex = 0; (currentIndex < 32 && enabled_vertex_attribs_count > 0); currentIndex++) {
@@ -733,7 +733,7 @@ GL_APICALL void GL_APIENTRY glDrawElements (GLenum mode, GLsizei count, GLenum t
             parameters[currentIndex * 4 + 3] = currentVertexArrayObject->attribs[currentIndex].format; // src format
         }
 
-        uint32_t vertexElementsID = create_opengl_object(gpuNode, VIRGL_OBJECT_VERTEX_ELEMENTS, parameters, (4 * (currentIndex + 1)), 1);
+        uint32_t vertexElementsID = create_opengl_object(gpuNode, VIRGL_OBJECT_VERTEX_ELEMENTS, parameters, (4 * (currentIndex)), 1);
 
         //TODO: Check when other VAO is binded
         uint32_t sizeVertex = 0;

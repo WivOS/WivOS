@@ -177,6 +177,7 @@ void *alloc_at_syscall(thread_regs_t *regs) { // rdi: address, rsi: count
         currentProcess->brkAddress += count * PAGE_SIZE;
         spinlock_unlock(&currentProcess->brkLock);
     }
+    if(!count) return (void *)baseAddress;
 
     void *ptr = pmm_alloc(count);
     if(!ptr) {
@@ -240,4 +241,26 @@ size_t fork_syscall(thread_regs_t *regs) {
     totalThreads++;
 
     return newPid;
+}
+
+size_t lseek_syscall(thread_regs_t *regs) { // rdi: fd, rsi: offset, rdx: type
+    size_t fd = regs->rdi;
+    size_t offset = (size_t)regs->rsi;
+    size_t type = regs->rdx;
+
+    process_t *currentProcess = get_active_process(cpuLocals[current_cpu].currentActiveThread);
+
+    spinlock_lock(&currentProcess->filesLock);
+
+    if(fd >= MAX_FILE_HANDLES || !currentProcess->fileHandles[fd] || currentProcess->fileHandles[fd] == (vfs_node_t *)-1) {
+        spinlock_unlock(&currentProcess->filesLock);
+        return -1;
+    }
+
+    vfs_node_t *currentFD = currentProcess->fileHandles[fd];
+    size_t ret = vfs_lseek(currentFD, offset, type);
+
+    spinlock_unlock(&currentProcess->filesLock);
+
+    return ret;
 }
