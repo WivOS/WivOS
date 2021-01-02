@@ -8,6 +8,7 @@ int printf(const char* format, ...);
 #include "gl.h"
 #include "../../kernel/fs/vfs.h"
 #include "opengl.h"
+#include "glsl.h"
 
 uint8_t fontBitmap[];
 
@@ -87,6 +88,18 @@ void *memset(void *s, int c, size_t n) {
     return s;
 }
 
+int memcmp(const void * ptr1, const void * ptr2, size_t num) {
+    const uint8_t *p1 = ptr1;
+    const uint8_t *p2 = ptr2;
+
+    for (size_t i = 0; i < num; i++) {
+        if (p1[i] != p2[i])
+            return p1[i] < p2[i] ? -1 : 1;
+    }
+
+    return 0;
+}
+
 size_t strlen(const char *str) {
     size_t len;
 
@@ -116,16 +129,16 @@ char *strcat(char *dest, const char *src)
 }
 
 struct block_meta {
-    size_t size;
-    struct block_meta *next;
-    int free;
-    int magic; // For debugging only. TODO: remove this in non-debug mode.
-    uint8_t pad[4072]; // For opengl we need fixed address, maybe we need to implement valloc
+    volatile size_t size;
+    volatile struct block_meta *next;
+    volatile int free;
+    volatile int magic; // For debugging only. TODO: remove this in non-debug mode.
+    volatile uint8_t pad[4072]; // For opengl we need fixed address, maybe we need to implement valloc
 };
 
 #define META_SIZE sizeof(struct block_meta)
 
-void *global_base = NULL;
+volatile void *global_base = NULL;
 
 struct block_meta *find_free_block(struct block_meta **last, size_t size) {
     struct block_meta *current = global_base;
@@ -305,6 +318,16 @@ int strncmp(const char *s1, const char *s2, int c) {
 static inline bool _is_digit(char ch)
 {
     return (ch >= '0') && (ch <= '9');
+}
+
+int strcmp(const char *dst, char *src) {
+    for (size_t i = 0; ; i++) {
+        char c1 = dst[i], c2 = src[i];
+        if (c1 != c2)
+            return c1 - c2;
+        if (!c1)
+            return 0;
+    }
 }
 
 float strtof(const char* str) {
@@ -809,12 +832,16 @@ int main() {
     const char *glslCode = 
     "#version 330 core\n"
     "layout (location = 0) in vec3 aPos;\n"
+    "layout (location = 1) in vec4 colour;\n"
     "out vec4 vertexColor;\n"
+    "uniform mat4 secondMat;\n"
+    "uniform mat4 projMat;\n"
+    "uniform mat4 trMat;\n"
+    "uniform mat4 rotMat;\n"
     "void main() {\n"
-    "   gl_Position = vec4(aPos, 1.0);\n"
-    "   vertexColor = vec4(0.5, 0.0, 0.0, 1.0);\n"
-    "}\n"
-    "\n";
+    "   gl_Position = projMat * trMat * rotMat * vec4(aPos, 1.0);\n"
+    "   vertexColor = colour;\n"
+    "}";
 
     size_t object = fopen("/teapot.obj", 0);
 
@@ -896,173 +923,11 @@ int main() {
 
     //Time to implement some type of compiler
 
-#if 0 // Totally garbage, implement a lexer in lex and a parser in yacc
-    bool running = true;
-    char *currString = glslCode;
-    char **attributesVariableNames = malloc(16 * sizeof(char *));
-    while(running) {
-        if(!strncmp(currString, GLSL_TOKEN_VERSION, strlen(GLSL_TOKEN_VERSION))) {
-            currString += strlen(GLSL_TOKEN_VERSION);
-            while(true) {
-                if(currString[0] == '\n') {
-                    printf("Found version token\n");
-                    currString++;
-                    break;
-                }
-                currString++;
-            }
-        } else if(!strncmp(currString, GLSL_TOKEN_LAYOUT, strlen(GLSL_TOKEN_LAYOUT))) {
-            currString += strlen(GLSL_TOKEN_LAYOUT) + 1;
-            if(currString[0] == '(') {
-                currString++;
-                if(!strncmp(currString, "location", strlen("location"))) {
-                    currString += strlen("location") + 3;
-                    uint32_t location = currString[0] - '0';
-                    while(currString[0] != ')') currString++;
-                    currString++;
-                    
-                    char *tempName = NULL;
-                    char *variableName = NULL;
-                    while(true) {
-                        if(currString[0] != ' ' && currString[0] != '\n') {
-                            if(!strncmp(currString, "in", 2)) {
-                                currString += 3;
-                                continue;
-                            } else if(!strncmp(currString, "vec", 3)) {
-                                currString += 3 + 1 + 1;
-                                continue;
-                            } else if(currString[0] == ';') {
-                                variableName = malloc(currString - tempName);
-                                memcpy(variableName, tempName, currString - tempName);
-                                variableName[currString - tempName] = 0;
-                            } else { // Variable name
-                                if(tempName == NULL)
-                                    tempName = currString;
-                            }
-                        }
-                        if(currString[0] == '\n') {
-                            currString++;
-                            break;
-                        }
-                        currString++;
-                    }
-                    attributesVariableNames[location] = variableName;
-                    printf("Found layout token, location = %x, name = %s\n", location, variableName);
-                }
-            } else {
-                printf("Error while compiling glsl to tgsi\n");
-                break;
-            }
-        } else if(!strncmp(currString, GLSL_TOKEN_OUT, strlen(GLSL_TOKEN_OUT))) {
-            currString += strlen(GLSL_TOKEN_OUT) + 1;
-            if(!strncmp(currString, "vec", 3)) {
-                currString += 3;
-                uint32_t vecSize = currString[0] - '0'; currString += 2;
-                char *tempString = currString;
-                while(true) {
-                    if(currString[0] == '\n') {
-                        char *variableName = malloc(currString - tempString);
-                        memcpy(variableName, tempString, currString - tempString - 1); variableName[currString - tempString - 1] = 0;
-                        printf("New out vec%x variable named as: %s\n", vecSize, variableName);
-                        currString++;
-                        break;
-                    }
-                    currString++;
-                }
-            }
-        } else if(!strncmp(currString, GLSL_TOKEN_VOID, strlen(GLSL_TOKEN_VOID))) {
-            currString += strlen(GLSL_TOKEN_VOID) + 1;
-            if(!strncmp(currString, "main", 3)) {
-                while(currString[0] != '{') currString++;
-                currString++;
+#if 1 // Totally garbage, implement a lexer in lex and a parser in yacc
+    char * vertexString = compile_glsl(glslCode);
 
-                //Code block here
-                bool blockCode = true;
-                while(blockCode) {
-                    switch(currString[0]) {
-                        case '\n':
-                            currString++;
-                            break;
-                        case '}':
-                            currString++;
-                            blockCode = false;
-                            break;
-                        default:
-                            {
-                                if(!strncmp(currString, "gl_Position", 11)) {
-                                    currString += 11;
-                                } else {
-                                    for(uint32_t i = 0; i < 16; i++) { // TODO: Create a function for this
-                                        if(attributesVariableNames[i] && !strncmp(currString, attributesVariableNames[i], strlen(attributesVariableNames[i]))) {
-                                            //We have a variable that we know
-                                            while(*currString != '=') currString++; // Skip until equal
-                                            currString++;
-
-                                            while(*currString == ' ') currString++; // Skip until a new character non empty
-
-                                            // Parse code block
-                                            bool blockCode2 = true;
-                                            while(blockCode) {
-                                                switch(currString[0]) {
-                                                    case '\n':
-                                                        currString++;
-                                                        break;
-                                                    case '}':
-                                                        currString++;
-                                                        blockCode = false;
-                                                        break;
-                                                    default:
-                                                        {
-                                                            if(!strncmp(currString, "vec", 3)) {
-                                                                currString += 3;
-                                                                uint32_t vecSize = currString[0] - '0'; currString++;
-                                                                
-                                                                while(*currString != '(') currString++;
-                                                                currString++;
-
-                                                                //Parse the vector Ex: vec3 -> [(variable.xy, number), (variable.x, number, number), ...]
-                                                                for(uint32_t j = 0; j < vecSize; j++) {
-                                                                    switch(*currString) {
-                                                                        case '0': case '1': case '2': case '3': case '4': case '5': case '6': case '7': case '8': case '9':
-                                                                            //Parse the float
-                                                                            break;
-
-                                                                        default:
-                                                                            //Variable: save it, check size, and add the size to index j, if greater than or equal to vecSize -> syntax error
-                                                                            break;
-                                                                    }
-                                                                }
-                                                            } else {
-                                                                printf("%c\n", currString[0]);
-                                                                currString++;
-                                                            }
-                                                        }
-                                                        break;
-                                                }
-                                            }
-                                        }
-                                    }
-                                    printf("%c\n", currString[0]);
-                                    currString++;
-                                }
-                            }
-                            break;
-                    }
-                }
-            } else {
-
-            }
-        } else if(currString[0] == '\n' || currString[0] == ' ') {
-            currString++;
-        } else if(currString[0] == 0) {
-            running = false;
-        } else {
-            printf("Error while compiling glsl to tgsi:\n%x\n", currString[0]);
-            running = false;
-        }
-    }
-
-    while(1);
+    //while(1);
+    printf("Yeah");
 #endif
 
     GLuint VBO;
@@ -1083,6 +948,8 @@ int main() {
     glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, 0, NULL);
     glEnableVertexAttribArray(1);
     glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, 0, (void*)(4 * sizeof(GLfloat)));
+
+    windows_flush();
 
 /*
     parameters = (uint32_t *)realloc(parameters, sizeof(uint32_t) * 8);
@@ -1144,7 +1011,7 @@ int main() {
 	   "  8:EMIT IMM[0].xxxx\n"
 	   "  9:END\n";
 
-    const char *vertexString =
+    /*const char *vertexString =
 	   "VERT\n"
 	   "DCL IN[0]\n"
 	   "DCL IN[1]\n"
@@ -1172,7 +1039,7 @@ int main() {
        "  14: MUL TEMP[14], TEMP[12], TEMP[13]\n"
        "  15: MOV OUT[0], TEMP[11]\n"
        "  16: MOV OUT[1], TEMP[14]\n"
-       "  17: END\n";
+       "  17: END\n";*/
 
     const char *fragmentString =
 	   "FRAG\n"
@@ -1820,7 +1687,7 @@ int sprintf(char* buffer, const char* format, ...)
 
 int printf(const char* format, ...)
 {
-    static char buffer[200];
+    static char buffer[4096];
     va_list va;
     va_start(va, format);
     const int ret = _vsnprintf(_out_buffer, buffer, (size_t)-1, format, va);

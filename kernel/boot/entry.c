@@ -1060,10 +1060,6 @@ void kentry_threaded() {
 
     printf("Ret: %lx, Entry: %lx\n", returnVal, entry);
 
-    void *codeStart = pmm_alloc(1);
-    vmm_map_pages(pml4, (void *)(0x400000000), codeStart, 1, 0x7);
-    void *codeStartKernel = (void *)((uint64_t)codeStart + VIRT_PHYS_BASE);
-    memcpy(codeStartKernel, (const void *)test_function, ((uint64_t)end_test_function - (uint64_t)test_function));
     thread_create(pid, (void *)entry);
 
     /*size_t i2 = 0;

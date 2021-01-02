@@ -53,14 +53,14 @@ typedef struct madt_lapic {
 } madt_lapic_t;
 
 typedef struct cpu {
-    size_t currentCpu;
-    size_t kernelStack;
-    size_t threadKernelStack;
-    size_t threadUserStack;
-    tid_t currentThread;
-    pid_t currentProcess;
-    size_t currentActiveThread;
-    uint8_t lapicId;
+    volatile size_t currentCpu;
+    volatile size_t kernelStack;
+    volatile size_t threadKernelStack;
+    volatile size_t threadUserStack;
+    volatile tid_t currentThread;
+    volatile pid_t currentProcess;
+    volatile size_t currentActiveThread;
+    volatile uint8_t lapicId;
 } cpu_t;
 
 #define current_cpu ({ \

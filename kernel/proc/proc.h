@@ -21,6 +21,7 @@ typedef struct thread_regs {
 
 typedef struct thread {
     volatile thread_regs_t context_regs;
+    volatile uint32_t guardPad;
     volatile tid_t tid;
     volatile tid_t schedTid;
     volatile pid_t pid;
@@ -30,7 +31,7 @@ typedef struct thread {
     volatile spinlock_t lock;
     volatile uint32_t guardPadding;
     volatile uint8_t fxstate[512] __attribute__((aligned(16)));
-} thread_t;
+} __attribute__((packed)) thread_t;
 
 typedef struct process {
     volatile pid_t pid;
@@ -41,7 +42,7 @@ typedef struct process {
     volatile uint64_t brkAddress;
     vfs_node_t **fileHandles;
     volatile spinlock_t filesLock;
-} process_t;
+} __attribute__((packed)) process_t;
 
 void scheduler_init();
 

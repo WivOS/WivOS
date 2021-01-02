@@ -143,10 +143,10 @@ void schedule(thread_regs_t *regs) {
         return;
     }
 
-    cpu_t *cpuLocal = &cpuLocals[current_cpu];
-    pid_t currentProcess = cpuLocal->currentProcess;
-    tid_t currentThread = cpuLocal->currentThread;
-    size_t currentActiveThread = cpuLocal->currentActiveThread;
+    volatile cpu_t *cpuLocal = &cpuLocals[current_cpu];
+    volatile pid_t currentProcess = cpuLocal->currentProcess;
+    volatile tid_t currentThread = cpuLocal->currentThread;
+    volatile size_t currentActiveThread = cpuLocal->currentActiveThread;
 
     if(currentActiveThread != -1) {
         volatile thread_t *current_thread = activeThreads[currentActiveThread];
@@ -156,6 +156,7 @@ void schedule(thread_regs_t *regs) {
         current_thread->context_regs = *regs;
         current_thread->cpuNumber = -1;
         if(currentProcess) {
+            //printf("RBP: %lx\n", cpuLocal->threadUserStack);
             current_thread->ustack_addr = (void *)cpuLocal->threadUserStack;
             fxsave(&current_thread->fxstate);
         }

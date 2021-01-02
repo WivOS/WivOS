@@ -1,4 +1,4 @@
-CFLAGS := -g -Wall -ffreestanding -Werror -Wno-unused-variable -Wno-unused-function -fno-pic -I$(MAIN_PATH)/kernel -I$(MAIN_PATH)/external/lai/include -O2 -mcmodel=large
+CFLAGS := -g -mno-red-zone -Wall -ffreestanding -Werror -Wno-unused-variable -Wno-unused-function -fno-pic -I$(MAIN_PATH)/kernel -I$(MAIN_PATH)/external/lai/include -O2 -mcmodel=large
 
 ifeq ($(DEBUG), 1)
 	BIN_DIR := bin/DEBUG

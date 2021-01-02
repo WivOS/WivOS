@@ -1,6 +1,6 @@
 SHELL = /bin/bash
 
-CFLAGS := -g -Wall -ffreestanding -Werror -Wno-unused-variable -Wno-strict-aliasing -Wno-unused-function -fno-pic -Ikernel -Iexternal/lai/include -O2 -g -mavx -Wno-address-of-packed-member
+CFLAGS := -g -mno-red-zone -Wall -ffreestanding -Werror -Wno-unused-variable -Wno-strict-aliasing -Wno-unused-function -fno-pic -Ikernel -Iexternal/lai/include -O2 -g -mavx -Wno-address-of-packed-member
 LDFLAGS := -nostdlib -no-pie
 
 ifeq ($(DEBUG), 1)

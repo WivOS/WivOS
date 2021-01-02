@@ -5,6 +5,7 @@ MAIN_PATH := ../..
 LINK_SCRIPT := linker.ld
 
 SRCS += opengl.c
+SRCS += glsl.c
 SRCS += main.c
 
 include ../makeinclude.mk
