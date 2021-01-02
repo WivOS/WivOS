@@ -834,7 +834,10 @@ int main() {
     "layout (location = 0) in vec3 aPos;\n"
     "layout (location = 1) in vec4 colour;\n"
     "out vec4 vertexColor;\n"
-    "uniform mat4 secondMat;\n"
+    "uniform vec4 secondMat0;\n"
+    "uniform vec4 secondMat1;\n"
+    "uniform vec4 secondMat2;\n"
+    "uniform vec4 secondMat3;\n"
     "uniform mat4 projMat;\n"
     "uniform mat4 trMat;\n"
     "uniform mat4 rotMat;\n"
@@ -923,8 +926,17 @@ int main() {
 
     //Time to implement some type of compiler
 
+    char *glslFragment =
+    "#version 330 core\n"
+    "out vec4 FragColor;\n"
+    "in vec4 vertexColor;\n"
+    "void main() {\n"
+    "   FragColor = vertexColor;\n"
+    "}";
+    char * fragmentString = compile_glsl_fragment(glslFragment);
+
 #if 1 // Totally garbage, implement a lexer in lex and a parser in yacc
-    char * vertexString = compile_glsl(glslCode);
+    char * vertexString = compile_glsl_vertex(glslCode);
 
     //while(1);
     printf("Yeah");
@@ -1041,7 +1053,7 @@ int main() {
        "  16: MOV OUT[1], TEMP[14]\n"
        "  17: END\n";*/
 
-    const char *fragmentString =
+    /*const char *fragmentString =
 	   "FRAG\n"
 	    "DCL IN[0], COLOR, LINEAR\n"
 	    "DCL OUT[0], COLOR\n"
@@ -1050,7 +1062,7 @@ int main() {
         "DCL SVIEW[0], 2D, FLOAT\n"
         "  0: TXP TEMP[0], IN[0], SAMP[0], 2D\n"
 	    "  1: MOV OUT[0], IN[0]\n"
-	    "  2: END\n";
+	    "  2: END\n";*/
 
     GLuint vShader = glCreateShader(GL_VERTEX_SHADER);
     glShaderSource(vShader, 1, &vertexString, NULL);

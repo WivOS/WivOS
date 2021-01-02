@@ -42,6 +42,24 @@ char *codeString;
 char *codeStringPos;
 uint64_t codeLine = 0;
 
+size_t poolSize;
+
+char *preDeclarationString = NULL;
+char *preDeclarationStringPos = NULL;
+
+int indexOfBp;
+
+uint64_t *text; // function location, but i think is not needed because we don't have jumps in tgsi
+uint64_t layoutData = 0;
+uint64_t outData = 0;
+uint64_t uniformData = 0;
+uint64_t tempVariable = 0;
+uint64_t assignRight = 0;
+uint64_t immPosition = 0;
+
+bool justCopy = 0;
+uint64_t returnVariable = 0;
+
 void next() {
     char *lastPos;
     int64_t hash;
@@ -92,6 +110,9 @@ void next() {
                 while(*src >= '0' && *src <= '9') {
                     tokenVal += ((float)(*src++ - '0') / (10 * position));
                     position *= 10;
+                }
+                if(*src == 'f') { // TODO: Double types
+                    src++;
                 }
             }
 
@@ -219,17 +240,6 @@ void match(int tk) {
     }
 }
 
-uint64_t *text; // function location, but i think is not needed because we don't have jumps in tgsi
-uint64_t layoutData = 0;
-uint64_t outData = 0;
-uint64_t uniformData = 0;
-uint64_t tempVariable = 0;
-uint64_t assignRight = 0;
-uint64_t immPosition = 0;
-
-bool justCopy = 0;
-uint64_t returnVariable = 0;
-
 const char *cVArray = "xyzw";
 
 void expression(int64_t level) {
@@ -322,7 +332,7 @@ void expression(int64_t level) {
                 if(id->class == Loc) {
                     //TODO
                 } else if(id->class == Glo) { // IN and UNIFORM
-                    if(assignRight && justCopy) {
+                    if(assignRight && justCopy && (id->variableType == IN || id->variableType == LAYOUT)) {
                         if(assignRight == 1)
                             tempVariable++;
                         if(id->vecSize > 0) {
@@ -350,7 +360,7 @@ void expression(int64_t level) {
                         returnVariable = (tempVariable - 1);
                     }
                 } else {
-                    printf("%d: undefined variable\n", line);
+                    printf("%d: undefined variable %s\n", line, id->name);
                     while(1);
                 }
 
@@ -419,14 +429,18 @@ void expression(int64_t level) {
                     3: MAD TEMP[3], CONST[1][15], IN[0].wwww, TEMP[2]
                 */
 
-                if(id->type == MAT) { // Parse other types
-                    if(id->variableType == UNIFORM) {
+                if(id->variableType == UNIFORM) { // Parse other types
+                    if(id->type == MAT) {
                         uint64_t tempVariableTemp = tempVariable++;
                         codeStringPos += sprintf(codeStringPos, "  %d: MUL TEMP[%d], CONST[1][%d], TEMP[%d].xxxx\n", codeLine++, tempVariableTemp, id->value + 0, returnVariable);
                         for(size_t i = 1; i < id->vecSize; i++) {
                             tempVariableTemp = tempVariable++;
                             codeStringPos += sprintf(codeStringPos, "  %d: MAD TEMP[%d], CONST[1][%d], TEMP[%d].%c%c%c%c, TEMP[%d]\n", codeLine++, tempVariableTemp, id->value + i, returnVariable, cVArray[i], cVArray[i], cVArray[i], cVArray[i],  (tempVariableTemp - 1));
                         }
+                        returnVariable = tempVariableTemp;
+                    } else if(id->type == VEC) {
+                        uint64_t tempVariableTemp = tempVariable++;
+                        codeStringPos += sprintf(codeStringPos, "  %d: MUL TEMP[%d], CONST[1][%d], TEMP[%d]\n", codeLine++, tempVariableTemp, id->value, (tempVariableTemp - 1));
                         returnVariable = tempVariableTemp;
                     }
                 }
@@ -445,8 +459,6 @@ void expression(int64_t level) {
         }
     }
 }
-
-int indexOfBp;
 
 void function_parameter() {
     int64_t variableType;
@@ -725,7 +737,7 @@ void global_declaration() {
             currentId->variableType = variableBaseType;
             currentId->class = Glo;
             currentId->vecSize = vecType; // Always 4 component
-            if(variableBaseType == LAYOUT) {
+            if(variableBaseType == LAYOUT || variableBaseType == IN) { // Layout is used in vertex shader and in is used in the others shaders
                 currentId->value = (int64_t)layoutData;
                 layoutData = layoutData + dataSize;
             } else if(variableBaseType == OUT) {
@@ -753,12 +765,7 @@ void program() {
     }
 }
 
-size_t poolSize;
-
-char *preDeclarationString = NULL;
-char *preDeclarationStringPos = NULL;
-
-char *compile_glsl(const char *string) {
+char *compile_glsl_vertex(const char *string) {
     line = 1;
 
     poolSize = 256 * 1024;
@@ -787,7 +794,8 @@ char *compile_glsl(const char *string) {
     next(); currentId->token = Bool;
     next(); idMain = currentId;
     next(); currentId->class = Glo;
-    currentId->type = FLOAT; // TODO Vectors
+    currentId->type = VEC; // TODO Vectors
+    currentId->vecSize = 4;
     next(); currentId->class = Sys;
 
     src = oldSrc = strdup(string);
@@ -824,6 +832,138 @@ char *compile_glsl(const char *string) {
     free(preDeclarationString);
     free(declarationString);
     free(codeString);
+    free(symbolsTable);
+
+    idMain = NULL;
+
+    tokenVal = 0;
+    currentId = NULL;
+    symbolsTable = NULL;
+
+    variableBaseType;
+    baseType;
+    exprType;
+    declarationString = NULL;
+    declarationStringPos = NULL;
+    codeString = NULL;
+    codeStringPos = NULL;
+    codeLine = 0;
+
+    token = 0;
+
+    indexOfBp = 0;
+
+    text = NULL;
+    layoutData = 0;
+    outData = 0;
+    uniformData = 0;
+    tempVariable = 0;
+    assignRight = 0;
+    immPosition = 0;
+
+    justCopy = 0;
+    returnVariable = 0;
+
+    return outString;
+}
+
+char *compile_glsl_fragment(const char *string) {
+    line = 1;
+
+    poolSize = 256 * 1024;
+
+    symbolsTable = (identifier_t *)malloc(poolSize);
+    declarationStringPos = declarationString = (char *)malloc(poolSize);
+    preDeclarationStringPos = preDeclarationString = (char *)malloc(poolSize);
+    codeStringPos = codeString = (char *)malloc(poolSize);
+    memset(symbolsTable, 0, poolSize);
+    memset(declarationString, 0, poolSize);
+    memset(codeString, 0, poolSize);
+
+    preDeclarationStringPos += sprintf(preDeclarationStringPos, "FRAG\n"); // Adapt this
+
+    src = "bool else if int uint float double layout uniform out in return while "
+          "void main vec4";
+
+    int64_t i = Bool;
+    while(i <= While) {
+        next();
+        currentId->token = i++;
+    }
+
+    next(); currentId->token = Bool;
+    next(); idMain = currentId;
+    next(); currentId->class = Sys;
+
+    src = oldSrc = strdup(string);
+
+    src[strlen(string)] = 0;
+
+    program();
+
+    codeStringPos += sprintf(codeStringPos, "  %d: END\n", codeLine++);
+
+    for(size_t i = 0; i < layoutData; i++) {
+        preDeclarationStringPos += sprintf(preDeclarationStringPos, "DCL IN[%d], COLOR, LINEAR\n", i);
+    }
+
+    //TODO: parse types for now generic
+    for(size_t i = 0; i < outData; i++) {
+        preDeclarationStringPos += sprintf(preDeclarationStringPos, "DCL OUT[%d], GENERIC[20]\n", i);
+    }
+
+    if(tempVariable > 1) {
+        preDeclarationStringPos += sprintf(preDeclarationStringPos, "DCL TEMP[0..%d], LOCAL\n", (tempVariable - 1));
+    } else if(tempVariable == 1) {
+        preDeclarationStringPos += sprintf(preDeclarationStringPos, "DCL TEMP[0], LOCAL\n");
+    }
+    if(uniformData)
+        preDeclarationStringPos += sprintf(preDeclarationStringPos, "DCL CONST[1][0..%d]\n", (uniformData - 1));
+
+    printf("\n%s%s%s", preDeclarationString, declarationString, codeString);
+
+    char *outString = malloc(poolSize * 2);
+    memset(outString, 0, poolSize * 2);
+
+    sprintf(outString, "%s%s%s", preDeclarationString, declarationString, codeString);
+
+    printf("Layout variables: %x\n", layoutData);
+    printf("Out variables: %x\n", outData);
+
+    free(preDeclarationString);
+    free(declarationString);
+    free(codeString);
+    free(symbolsTable);
+
+    idMain = NULL;
+
+    tokenVal = 0;
+    currentId = NULL;
+    symbolsTable = NULL;
+
+    variableBaseType;
+    baseType;
+    exprType;
+    declarationString = NULL;
+    declarationStringPos = NULL;
+    codeString = NULL;
+    codeStringPos = NULL;
+    codeLine = 0;
+
+    token = 0;
+
+    indexOfBp = 0;
+
+    text = NULL;
+    layoutData = 0;
+    outData = 0;
+    uniformData = 0;
+    tempVariable = 0;
+    assignRight = 0;
+    immPosition = 0;
+
+    justCopy = 0;
+    returnVariable = 0;
 
     return outString;
 }
