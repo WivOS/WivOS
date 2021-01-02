@@ -15,6 +15,9 @@ int strcmp(const char *dst, char *src);
 int printf(const char * format, ...);
 int sprintf(char* buffer, const char* format, ...);
 int strncmp(const char *s1, const char *s2, int c);
+void *memcpy(void *, const void *, size_t);
+size_t strlen(const char *str);
+void *memset(void *, int, size_t);
 
 typedef struct {
     uint32_t bufferObject;

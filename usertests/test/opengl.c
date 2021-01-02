@@ -435,7 +435,7 @@ static gl_vertex_array_object_t *vertexArrays = NULL;
 static size_t currentvertexArray = 0;
 static gl_shader_object_t *shaderObjects = NULL;
 static size_t currentShaderObject = 0;
-static gl_shader_object_t *programObjects = NULL;
+static gl_program_object_t *programObjects = NULL;
 static size_t currentProgramObject = 0;
 
 //TODO create hash map
@@ -484,7 +484,7 @@ static gl_shader_object_t *get_shader_from_index(uint32_t index) {
 }
 
 static uint32_t alloc_opengl_program() {
-    programObjects = realloc(programObjects, sizeof(gl_vertex_array_object_t *) * (currentProgramObject + 1));
+    programObjects = realloc(programObjects, sizeof(gl_program_object_t *) * (currentProgramObject + 1));
     currentProgramObject++;
 
     return (currentProgramObject - 1);
@@ -647,7 +647,7 @@ GL_APICALL void GL_APIENTRY glVertexAttribPointer (GLuint index, GLint size, GLe
     if(size == 4 && type == GL_FLOAT)
         format = 31;
     
-    vao->attribs[index].position = (GLuint)pointer;
+    vao->attribs[index].position = (GLuint)((uint64_t)pointer);
     vao->attribs[index].size = size;
     vao->attribs[index].type = type;
     vao->attribs[index].format = format;

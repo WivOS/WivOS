@@ -63,7 +63,7 @@ uint64_t returnVariable = 0;
 void next() {
     char *lastPos;
     int64_t hash;
-    while(token = *src) {
+    while((token = *src)) {
         ++src;
 
         if(token == '\n') line++;
@@ -461,7 +461,7 @@ void expression(int64_t level) {
 }
 
 void function_parameter() {
-    int64_t variableType;
+    __attribute__((unused)) int64_t variableType;
     int64_t type;
     int64_t params;
     params = 0;
@@ -634,7 +634,7 @@ void function_declaration() {
 void global_declaration() {
     int64_t type;
     int64_t i;
-    int64_t location = -1;
+    __attribute__((unused)) int64_t location = -1;
     int64_t vecType = 0;
     int dataSize = 0;
 
@@ -731,7 +731,7 @@ void global_declaration() {
 
         if(token == '(') {
             currentId->class = Fun;
-            currentId->value = (int)(text + 1);
+            currentId->value = (int)((uint64_t)text + 1);
             function_declaration();
         } else {
             currentId->variableType = variableBaseType;
@@ -792,7 +792,7 @@ char *compile_glsl_vertex(const char *string) {
     }
 
     next(); currentId->token = Bool;
-    next(); idMain = currentId;
+    next(); idMain = (int *)currentId;
     next(); currentId->class = Glo;
     currentId->type = VEC; // TODO Vectors
     currentId->vecSize = 4;
@@ -840,9 +840,9 @@ char *compile_glsl_vertex(const char *string) {
     currentId = NULL;
     symbolsTable = NULL;
 
-    variableBaseType;
-    baseType;
-    exprType;
+    variableBaseType = 0;
+    baseType = 0;
+    exprType = 0;
     declarationString = NULL;
     declarationStringPos = NULL;
     codeString = NULL;
@@ -892,7 +892,7 @@ char *compile_glsl_fragment(const char *string) {
     }
 
     next(); currentId->token = Bool;
-    next(); idMain = currentId;
+    next(); idMain = (int *)currentId;
     next(); currentId->class = Sys;
 
     src = oldSrc = strdup(string);
@@ -941,9 +941,9 @@ char *compile_glsl_fragment(const char *string) {
     currentId = NULL;
     symbolsTable = NULL;
 
-    variableBaseType;
-    baseType;
-    exprType;
+    variableBaseType = 0;
+    baseType = 0;
+    exprType = 0;
     declarationString = NULL;
     declarationStringPos = NULL;
     codeString = NULL;

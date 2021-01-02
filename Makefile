@@ -126,6 +126,8 @@ $(BIN_DIR)/image.hdd: $(BUILD_DIR)/kernel/proc/trampoline.bin $(BIN_DIR)/wivos.e
 
 clean:
 	rm -fr build
+	@make -C modules clean
+	@make -C usertests clean
 
 clean-all: clean
 	rm -fr bin
