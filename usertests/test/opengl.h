@@ -1,6 +1,7 @@
 #pragma once
 
 #include "gl.h"
+#include "glsl.h"
 
 size_t fopen(char *filePath, size_t flags);
 size_t fread(size_t fd, void *buffer, size_t count);
@@ -49,6 +50,10 @@ typedef struct {
     gl_shader_object_t *vertexShader;
     gl_shader_object_t *fragmentShader;
     gl_shader_object_t *geometryShader;
+    identifier_t *uniformSymbols;
+    uint32_t constantBufferID;
+    float *constantBuffer;
+    uint32_t constantBufferSize;
 } gl_program_object_t;
 
 typedef struct { // TODO: When we have more than two opengl contexts we needs this

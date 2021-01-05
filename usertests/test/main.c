@@ -711,6 +711,27 @@ uint8_t tex2d[16][16][4];
 
 extern void windows_flush();
 
+float projMat[] = {
+    1,  0, 0, 0,
+    0, 1.33333333333333333333f, 0, 0,
+    0,  0, -1.0020020020020020020f, -1,
+    0,  0, -2.0020020020020020020f, 0
+};
+
+float trMat[] = {
+    1, 0, 0, 0,
+    0, 1, 0, 0,
+    0, 0, 1, 0,
+    0, 0, -3, 1,
+};
+
+float rotMat[] = {
+    0.5, 0, -0.5, 0,
+    0, 1, 0, 0,
+    0.5, 0, 0.5, 0,
+    0, 0, 0, 1
+};
+
 //#define DONT_USE_EBO
 
 int main() {
@@ -829,23 +850,6 @@ int main() {
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    const char *glslCode = 
-    "#version 330 core\n"
-    "layout (location = 0) in vec3 aPos;\n"
-    "layout (location = 1) in vec4 colour;\n"
-    "out vec4 vertexColor;\n"
-    "uniform vec4 secondMat0;\n"
-    "uniform vec4 secondMat1;\n"
-    "uniform vec4 secondMat2;\n"
-    "uniform vec4 secondMat3;\n"
-    "uniform mat4 projMat;\n"
-    "uniform mat4 trMat;\n"
-    "uniform mat4 rotMat;\n"
-    "void main() {\n"
-    "   gl_Position = projMat * trMat * rotMat * vec4(aPos, 1.0);\n"
-    "   vertexColor = colour;\n"
-    "}";
-
     size_t object = fopen("/teapot.obj", 0);
 
     struct vertex *vertexList = malloc(sizeof(struct vertex) * 100);
@@ -924,24 +928,6 @@ int main() {
     }
     printf("%lx %lx\n", vertexList, indexList);
 
-    //Time to implement some type of compiler
-
-    char *glslFragment =
-    "#version 330 core\n"
-    "out vec4 FragColor;\n"
-    "in vec4 vertexColor;\n"
-    "void main() {\n"
-    "   FragColor = vertexColor;\n"
-    "}";
-    char * fragmentString = compile_glsl_fragment(glslFragment);
-
-#if 1 // Totally garbage, implement a lexer in lex and a parser in yacc
-    char * vertexString = compile_glsl_vertex(glslCode);
-
-    //while(1);
-    printf("Yeah");
-#endif
-
     GLuint VBO;
     glGenBuffers(1, &VBO);
     glBindBuffer(GL_ARRAY_BUFFER, VBO);
@@ -963,32 +949,6 @@ int main() {
 
     windows_flush();
 
-/*
-    parameters = (uint32_t *)realloc(parameters, sizeof(uint32_t) * 8);
-    parameters[0 * 4 + 0] = offsetof(struct vertex, position); // src offset
-    parameters[0 * 4 + 1] = 0; // instance divisor
-    parameters[0 * 4 + 2] = 0; // vertex buffer index
-    parameters[0 * 4 + 3] = 31; // src format
-
-    parameters[1 * 4 + 0] = offsetof(struct vertex, color); // src offset
-    parameters[1 * 4 + 1] = 0; // instance divisor
-    parameters[1 * 4 + 2] = 0; // vertex buffer index
-    parameters[1 * 4 + 3] = 31; // src format
-    uint32_t vertexElementsID = create_opengl_object(gpuNode, VIRGL_OBJECT_VERTEX_ELEMENTS, parameters, 8, 1);
-
-    ioctl(gpuNode, VIRTGPU_IOCTL_SUBMIT_3D_COMMAND_QUEUE, NULL);
-
-    uint32_t resource3D = create_simple_buffer(gpuNode, sizeof(vertices), PIPE_BIND_VERTEX_BUFFER, NULL);
-
-    send_inline_write(gpuNode, resource3D, 0, 0, (virtio_box_t){
-        0, 0, 0,
-        sizeof(vertices), 1, 1
-    }, &vertices, sizeof(vertices), 0, 0);
-
-    set_vertex_buffers(gpuNode, sizeof(struct vertex), 0, resource3D);
-
-    ioctl(gpuNode, VIRTGPU_IOCTL_SUBMIT_3D_COMMAND_QUEUE, NULL);*/
-
 
     uint32_t xfbID = create_simple_buffer(gpuNode, 12 * 3 * sizeof(struct vertex), PIPE_BIND_STREAM_OUTPUT, NULL);
 
@@ -1001,7 +961,7 @@ int main() {
     set_streamout_targets(gpuNode, 0, streamoutID);
 
 
-    const char *geometryShader =
+    /*const char *geometryShader =
 	   "GEOM\n"
 	   "PROPERTY GS_INPUT_PRIMITIVE TRIANGLES\n"
 	   "PROPERTY GS_OUTPUT_PRIMITIVE TRIANGLE_STRIP\n"
@@ -1021,7 +981,7 @@ int main() {
 	   "  6:MOV OUT[0], IN[2][0]\n"
 	   "  7:MOV OUT[1], IN[2][1]\n"
 	   "  8:EMIT IMM[0].xxxx\n"
-	   "  9:END\n";
+	   "  9:END\n";*/
 
     /*const char *vertexString =
 	   "VERT\n"
@@ -1064,12 +1024,37 @@ int main() {
 	    "  1: MOV OUT[0], IN[0]\n"
 	    "  2: END\n";*/
 
+    const char *glslVertex = 
+    "#version 330 core\n"
+    "layout (location = 0) in vec3 aPos;\n"
+    "layout (location = 1) in vec4 colour;\n"
+    "out vec4 vertexColor;\n"
+    "uniform vec4 secondMat0;\n"
+    "uniform vec4 secondMat1;\n"
+    "uniform vec4 secondMat2;\n"
+    "uniform vec4 secondMat3;\n"
+    "uniform mat4 projMat;\n"
+    "uniform mat4 trMat;\n"
+    "uniform mat4 rotMat;\n"
+    "void main() {\n"
+    "   gl_Position = projMat * trMat * rotMat * vec4(aPos, 1.0);\n"
+    "   vertexColor = colour;\n"
+    "}";
+
+    char *glslFragment =
+    "#version 330 core\n"
+    "out vec4 FragColor;\n"
+    "in vec4 vertexColor;\n"
+    "void main() {\n"
+    "   FragColor = vertexColor;\n"
+    "}";
+
     GLuint vShader = glCreateShader(GL_VERTEX_SHADER);
-    glShaderSource(vShader, 1, &vertexString, NULL);
+    glShaderSource(vShader, 1, &glslVertex, NULL);
     glCompileShader(vShader);
 
     GLuint fShader = glCreateShader(GL_FRAGMENT_SHADER);
-    glShaderSource(fShader, 1, &fragmentString, NULL);
+    glShaderSource(fShader, 1, &glslFragment, NULL);
     glCompileShader(fShader);
 
     GLuint programID = glCreateProgram();
@@ -1079,20 +1064,22 @@ int main() {
 
     glUseProgram(programID);
 
+    printf("%x %x\n", glGetUniformLocation(programID, "projMat"), glGetUniformLocation(programID, "secondMat1"));
+
     //uint32_t vertShaderID = create_shader(gpuNode, vertexString, 0, 1);
     //uint32_t fragShaderID = create_shader(gpuNode, fragmentString, 1, 1);
     //uint32_t geomShaderID = create_shader(gpuNode, geometryShader, 2, 1);
 
-    uint32_t resourceUniform = create_simple_buffer(gpuNode, sizeof(constants), PIPE_BIND_CONSTANT_BUFFER, NULL);
+    uint32_t resourceUniform = 0;/*create_simple_buffer(gpuNode, sizeof(constants), PIPE_BIND_CONSTANT_BUFFER, NULL);*/
 
-    send_inline_write(gpuNode, resourceUniform, 0, (1 << 1), (virtio_box_t){
+    /*send_inline_write(gpuNode, resourceUniform, 0, (1 << 1), (virtio_box_t){
         0, 0, 0,
         sizeof(constants), 1, 1
     }, &constants, sizeof(constants), 0, 0);
 
-    ioctl(gpuNode, VIRTGPU_IOCTL_SUBMIT_3D_COMMAND_QUEUE, NULL);
+    ioctl(gpuNode, VIRTGPU_IOCTL_SUBMIT_3D_COMMAND_QUEUE, NULL);*/
 
-    command.command = VIRGL_CCMD_SET_UNIFORM_BUFFER;
+    /*command.command = VIRGL_CCMD_SET_UNIFORM_BUFFER;
     command.option = 0;
     command.length = 5;
     command.parameters = (uint32_t *)realloc(command.parameters, sizeof(uint32_t) * 5);
@@ -1102,7 +1089,7 @@ int main() {
     command.parameters[3] = sizeof(constants); // Length
     command.parameters[4] = resourceUniform;
 
-    ioctl(gpuNode, VIRTGPU_IOCTL_ADD_3D_COMMAND_TO_QUEUE, &command);
+    ioctl(gpuNode, VIRTGPU_IOCTL_ADD_3D_COMMAND_TO_QUEUE, &command);*/
 
     //---------------------
 
@@ -1152,6 +1139,10 @@ int main() {
 
     ioctl(gpuNode, VIRTGPU_IOCTL_ADD_3D_COMMAND_TO_QUEUE, &command);
 
+    glUniformMatrix4fv(glGetUniformLocation(programID, "projMat"), 1, GL_FALSE, projMat);
+    glUniformMatrix4fv(glGetUniformLocation(programID, "trMat"), 1, GL_FALSE, trMat);
+    glUniformMatrix4fv(glGetUniformLocation(programID, "rotMat"), 1, GL_FALSE, rotMat);
+
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
     glDrawElements(GL_TRIANGLES, indexCount, GL_UNSIGNED_INT, 0);
 
@@ -1178,17 +1169,27 @@ int main() {
 
         ioctl(gpuNode, VIRTGPU_IOCTL_SUBMIT_3D_COMMAND_QUEUE, NULL);
 
-        constants[46] -= 0.05f;
+        /*constants[46] -= 0.05f;
 
         constants[48] = cosine(angle);
         constants[50] = -sine(angle);
         constants[56] = sine(angle);
-        constants[58] = cosine(angle);
+        constants[58] = cosine(angle);*/
 
-        send_inline_write(gpuNode, resourceUniform, 0, (1 << 1), (virtio_box_t){
+        trMat[14] -= 0.05f;
+
+        rotMat[0] = cosine(angle);
+        rotMat[2] = -sine(angle);
+        rotMat[8] = sine(angle);
+        rotMat[10] = cosine(angle);
+
+        /*send_inline_write(gpuNode, resourceUniform, 0, (1 << 1), (virtio_box_t){
             0, 0, 0,
             sizeof(constants), 1, 1
-        }, &constants, sizeof(constants), 0, 0);
+        }, &constants, sizeof(constants), 0, 0);*/
+
+        glUniformMatrix4fv(glGetUniformLocation(programID, "trMat"), 1, GL_FALSE, trMat);
+        glUniformMatrix4fv(glGetUniformLocation(programID, "rotMat"), 1, GL_FALSE, rotMat);
 
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
         glDrawElements(GL_TRIANGLES, indexCount * 3, GL_UNSIGNED_INT, 0);

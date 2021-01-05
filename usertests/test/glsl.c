@@ -11,21 +11,6 @@ enum {
     Assign, Cond, Lor, Lan, Or, Xor, And, Eq, Ne, Lt, Gt, Le, Ge, Shl, Shr, Add, Sub, Mul, Div, Mod, Inc, Dec, Brak
 };
 
-typedef struct {
-    int64_t token;
-    int64_t hash;
-    char *name;
-    int64_t class;
-    int64_t type;
-    int64_t value;
-    int64_t location;
-    int64_t vecSize;
-    int64_t variableType;
-    int64_t BClass;
-    int64_t BType;
-    int64_t BValue;
-} identifier_t;
-
 enum { BOOL, INT, UINT, FLOAT, DOUBLE, LAYOUT, UNIFORM, OUT, IN, VEC, MAT };
 int *idMain;
 
@@ -722,7 +707,7 @@ void global_declaration() {
             printf("%d: bad global declaration\n", line);
             while(1);
         }
-        if(currentId->class) {
+        if(currentId->class && currentId->variableType == UNIFORM) { // In case is a uniform we have a preserved value
             printf("%d: duplicate global declaration\n", line);
             while(1);
         }
@@ -733,7 +718,7 @@ void global_declaration() {
             currentId->class = Fun;
             currentId->value = (int)((uint64_t)text + 1);
             function_declaration();
-        } else {
+        } else if(currentId->variableType != UNIFORM) { // If not defined as unform continue
             currentId->variableType = variableBaseType;
             currentId->class = Glo;
             currentId->vecSize = vecType; // Always 4 component
@@ -765,16 +750,50 @@ void program() {
     }
 }
 
-char *compile_glsl_vertex(const char *string) {
+char *compile_glsl_vertex(const char *string, bool preserveLastUniformData, bool preserveLastSymbolsTable) {
+    idMain = NULL;
+
+    tokenVal = 0;
+    currentId = NULL;
+    if(!preserveLastSymbolsTable)
+        symbolsTable = NULL;
+
+    variableBaseType = 0;
+    baseType = 0;
+    exprType = 0;
+    declarationString = NULL;
+    declarationStringPos = NULL;
+    codeString = NULL;
+    codeStringPos = NULL;
+    codeLine = 0;
+
+    token = 0;
+
+    indexOfBp = 0;
+
+    text = NULL;
+    layoutData = 0;
+    outData = 0;
+    if(!preserveLastUniformData)
+        uniformData = 0;
+    tempVariable = 0;
+    assignRight = 0;
+    immPosition = 0;
+
+    justCopy = 0;
+    returnVariable = 0;
+
     line = 1;
 
     poolSize = 256 * 1024;
 
-    symbolsTable = (identifier_t *)malloc(poolSize);
+    if(!preserveLastSymbolsTable)
+        symbolsTable = (identifier_t *)malloc(poolSize);
     declarationStringPos = declarationString = (char *)malloc(poolSize);
     preDeclarationStringPos = preDeclarationString = (char *)malloc(poolSize);
     codeStringPos = codeString = (char *)malloc(poolSize);
-    memset(symbolsTable, 0, poolSize);
+    if(!preserveLastSymbolsTable)
+        memset(symbolsTable, 0, poolSize);
     memset(declarationString, 0, poolSize);
     memset(codeString, 0, poolSize);
 
@@ -832,13 +851,34 @@ char *compile_glsl_vertex(const char *string) {
     free(preDeclarationString);
     free(declarationString);
     free(codeString);
+    //free(symbolsTable); We need to save constant symbols
+
+    identifier_t *symbolsTableTmp = (identifier_t *)malloc(poolSize);
+
+    identifier_t *currentId = symbolsTable;
+    identifier_t *currentIdTmp = symbolsTableTmp;
+    while(currentId->token) {
+        if(currentId->variableType == UNIFORM) { // Save it
+            *currentIdTmp = *currentId;
+            currentIdTmp = currentIdTmp + sizeof(identifier_t);
+        }
+        currentId = currentId + sizeof(identifier_t);
+    }
+
     free(symbolsTable);
 
+    symbolsTable = symbolsTableTmp;
+
+    return outString;
+}
+
+char *compile_glsl_fragment(const char *string, bool preserveLastUniformData, bool preserveLastSymbolsTable) {
     idMain = NULL;
 
     tokenVal = 0;
     currentId = NULL;
-    symbolsTable = NULL;
+    if(!preserveLastSymbolsTable)
+        symbolsTable = NULL;
 
     variableBaseType = 0;
     baseType = 0;
@@ -856,7 +896,8 @@ char *compile_glsl_vertex(const char *string) {
     text = NULL;
     layoutData = 0;
     outData = 0;
-    uniformData = 0;
+    if(!preserveLastUniformData)
+        uniformData = 0;
     tempVariable = 0;
     assignRight = 0;
     immPosition = 0;
@@ -864,19 +905,18 @@ char *compile_glsl_vertex(const char *string) {
     justCopy = 0;
     returnVariable = 0;
 
-    return outString;
-}
-
-char *compile_glsl_fragment(const char *string) {
     line = 1;
 
     poolSize = 256 * 1024;
 
-    symbolsTable = (identifier_t *)malloc(poolSize);
+    if(!preserveLastSymbolsTable)
+        symbolsTable = (identifier_t *)malloc(poolSize);
     declarationStringPos = declarationString = (char *)malloc(poolSize);
     preDeclarationStringPos = preDeclarationString = (char *)malloc(poolSize);
     codeStringPos = codeString = (char *)malloc(poolSize);
-    memset(symbolsTable, 0, poolSize);
+    if(!preserveLastSymbolsTable)
+        memset(symbolsTable, 0, poolSize);
+    memset(preDeclarationStringPos, 0, poolSize);
     memset(declarationString, 0, poolSize);
     memset(codeString, 0, poolSize);
 
@@ -933,37 +973,30 @@ char *compile_glsl_fragment(const char *string) {
     free(preDeclarationString);
     free(declarationString);
     free(codeString);
+    //free(symbolsTable); We need to save constant symbols
+
+    identifier_t *symbolsTableTmp = (identifier_t *)malloc(poolSize);
+
+    identifier_t *currentId = symbolsTable;
+    identifier_t *currentIdTmp = symbolsTableTmp;
+    while(currentId->token) {
+        if(currentId->variableType == UNIFORM) { // Save it
+            *currentIdTmp = *currentId;
+            currentIdTmp = currentIdTmp + sizeof(identifier_t);
+        }
+        currentId = currentId + sizeof(identifier_t);
+    }
+
     free(symbolsTable);
 
-    idMain = NULL;
-
-    tokenVal = 0;
-    currentId = NULL;
-    symbolsTable = NULL;
-
-    variableBaseType = 0;
-    baseType = 0;
-    exprType = 0;
-    declarationString = NULL;
-    declarationStringPos = NULL;
-    codeString = NULL;
-    codeStringPos = NULL;
-    codeLine = 0;
-
-    token = 0;
-
-    indexOfBp = 0;
-
-    text = NULL;
-    layoutData = 0;
-    outData = 0;
-    uniformData = 0;
-    tempVariable = 0;
-    assignRight = 0;
-    immPosition = 0;
-
-    justCopy = 0;
-    returnVariable = 0;
+    symbolsTable = symbolsTableTmp;
 
     return outString;
+}
+
+identifier_t *get_copy_of_last_execution_symbols() {
+    identifier_t *copySymbols = (identifier_t *)malloc(poolSize);
+    memcpy(copySymbols, symbolsTable, poolSize);
+
+    return copySymbols;
 }

@@ -7,6 +7,7 @@ int printf(const char* format, ...);
 #include <stddef.h>
 
 #include "opengl.h"
+#include "glsl.h"
 
 static volatile uint32_t currOpenglResource = 1;
 
@@ -410,6 +411,22 @@ static void draw_vbo(size_t gpuNode, uint32_t start, uint32_t count, uint32_t mo
     command.parameters[9] = minIndex; // Min Index
     command.parameters[10] = maxIndex; // Max Index
     command.parameters[11] = 0; // Cso
+
+    ioctl(gpuNode, VIRTGPU_IOCTL_ADD_3D_COMMAND_TO_QUEUE, &command);
+}
+
+static void set_uniform_buffer(size_t gpuNode, uint32_t shaderType, uint32_t sizeofConstants, uint32_t resourceID) {
+    virtgpu_3d_command_t command = {0};
+
+    command.command = VIRGL_CCMD_SET_UNIFORM_BUFFER;
+    command.option = 0;
+    command.length = 5;
+    command.parameters = (uint32_t *)realloc(command.parameters, sizeof(uint32_t) * 5);
+    command.parameters[0] = shaderType;
+    command.parameters[1] = 1; // Index
+    command.parameters[2] = 0; // Offset
+    command.parameters[3] = sizeofConstants; // Length
+    command.parameters[4] = resourceID;
 
     ioctl(gpuNode, VIRTGPU_IOCTL_ADD_3D_COMMAND_TO_QUEUE, &command);
 }
@@ -850,7 +867,7 @@ GL_APICALL void GL_APIENTRY glCompileShader (GLuint shader) {
     gl_shader_object_t *shaderObj = get_shader_from_index(shader);
     if(!shaderObj) return;
 
-    uint32_t type = 0;
+    /*uint32_t type = 0;
 
     if(shaderObj->type == GL_VERTEX_SHADER)
         type = 0;
@@ -859,7 +876,8 @@ GL_APICALL void GL_APIENTRY glCompileShader (GLuint shader) {
     else if(shaderObj->type == GL_GEOMETRY_SHADER)
         type = 2;
 
-    shaderObj->shaderID = create_shader(gpuNode, shaderObj->string, type, 0);
+    shaderObj->shaderID = create_shader(gpuNode, shaderObj->string, type, 0);*/
+    //We will compile the shader when we link to merge all the consts
 }
 
 GL_APICALL GLuint GL_APIENTRY glCreateProgram (void) {
@@ -867,6 +885,10 @@ GL_APICALL GLuint GL_APIENTRY glCreateProgram (void) {
     get_program_from_index(id)->vertexShader = NULL;
     get_program_from_index(id)->fragmentShader = NULL;
     get_program_from_index(id)->geometryShader = NULL;
+    get_program_from_index(id)->uniformSymbols = NULL;
+    get_program_from_index(id)->constantBuffer = NULL;
+    get_program_from_index(id)->constantBufferID = 0;
+    get_program_from_index(id)->constantBufferSize = 0;
 
     return id;
 }
@@ -893,9 +915,70 @@ GL_APICALL void GL_APIENTRY glAttachShader (GLuint program, GLuint shader) {
     }
 }
 
-GL_APICALL void GL_APIENTRY glLinkProgram (GLuint program) {
-    return; // I don't know
+static void compile_shader (gl_shader_object_t *shaderObj, bool preserve) {
+    if(!shaderObj) return;
+
+    uint32_t type = 0;
+
+    if(shaderObj->type == GL_VERTEX_SHADER)
+        type = 0;
+    else if(shaderObj->type == GL_FRAGMENT_SHADER)
+        type = 1;
+    else if(shaderObj->type == GL_GEOMETRY_SHADER)
+        type = 2;
+
+    char *strTmp;
+
+    if(shaderObj->type == GL_VERTEX_SHADER)
+        strTmp = compile_glsl_vertex(shaderObj->string, preserve, preserve);
+    else if(shaderObj->type == GL_FRAGMENT_SHADER)
+        strTmp = compile_glsl_fragment(shaderObj->string, preserve, preserve);
+
+    free(shaderObj->string);
+    shaderObj->string = strTmp;
+
+    shaderObj->shaderID = create_shader(gpuNode, shaderObj->string, type, 0);
 }
+
+GL_APICALL void GL_APIENTRY glLinkProgram (GLuint program) {
+    gl_program_object_t *programObj = get_program_from_index(program);
+    if(!programObj) return;
+
+    if(programObj->vertexShader)
+        compile_shader(programObj->vertexShader, false);
+
+    if(programObj->fragmentShader)
+        compile_shader(programObj->fragmentShader, true);
+
+    if(programObj->geometryShader)
+        compile_shader(programObj->geometryShader, true);
+
+    programObj->uniformSymbols = get_copy_of_last_execution_symbols();
+
+    identifier_t *symbolsTable = programObj->uniformSymbols;
+    identifier_t *currentId = symbolsTable;
+    uint32_t constantBufferSize = 0; // Needs to be multiplied by four, all constants are 4 component vectors
+    while(currentId->token) {
+        if(currentId->value > constantBufferSize) {
+            constantBufferSize = currentId->value;
+        }
+        currentId = currentId + sizeof(identifier_t);
+    }
+
+    constantBufferSize *= sizeof(float) * 4;
+    constantBufferSize += sizeof(float) * 4 * 4; //todo, check types
+
+    programObj->constantBuffer = malloc(constantBufferSize);
+    memset(programObj->constantBuffer, 0, constantBufferSize);
+
+    programObj->constantBufferID = create_simple_buffer(gpuNode, constantBufferSize, PIPE_BIND_CONSTANT_BUFFER, NULL);
+
+    programObj->constantBufferSize = constantBufferSize;
+
+    return;
+}
+
+gl_program_object_t *currentProgram = NULL;
 
 GL_APICALL void GL_APIENTRY glUseProgram (GLuint program) {
     gl_program_object_t *programObj = get_program_from_index(program);
@@ -909,6 +992,55 @@ GL_APICALL void GL_APIENTRY glUseProgram (GLuint program) {
 
     if(programObj->geometryShader && programObj->geometryShader->shaderID)
         bind_shader(gpuNode, programObj->geometryShader->shaderID, 0x2);
+
+    //We can use this to set multiple buffers
+    set_uniform_buffer(gpuNode, 0, programObj->constantBufferSize, programObj->constantBufferID);
+    set_uniform_buffer(gpuNode, 1, programObj->constantBufferSize, programObj->constantBufferID);
+    set_uniform_buffer(gpuNode, 2, programObj->constantBufferSize, programObj->constantBufferID);
+
+    currentProgram = programObj;
+}
+
+enum { BOOL, INT, UINT, FLOAT, DOUBLE, LAYOUT, UNIFORM, OUT, IN, VEC, MAT };
+
+GL_APICALL GLint GL_APIENTRY glGetUniformLocation (GLuint program, const GLchar *name) {
+    gl_program_object_t *programObj = get_program_from_index(program);
+    if(!programObj) return;
+
+    if(!programObj->uniformSymbols) return -1;
+
+    identifier_t *symbolsTable = programObj->uniformSymbols;
+    identifier_t *currentId = symbolsTable;
+    GLint j = 0;
+    while(currentId->token) {
+        if(!strcmp(currentId->name, name) && currentId->variableType == UNIFORM /* In case we missed something */) {
+            return currentId->value; // Precalculated
+        }
+
+        currentId = currentId + sizeof(identifier_t);
+    }
+
+    return -1;
+}
+
+static void update_constant_buffer(gl_program_object_t *programObj) {
+    if(!programObj || programObj->constantBufferID == 0 || programObj->constantBuffer == NULL) return;
+
+    send_inline_write(gpuNode, programObj->constantBufferID, 0, (1 << 1), (virtio_box_t){
+        0, 0, 0,
+        programObj->constantBufferSize, 1, 1
+    }, programObj->constantBuffer, programObj->constantBufferSize, 0, 0);
+
+    ioctl(gpuNode, VIRTGPU_IOCTL_SUBMIT_3D_COMMAND_QUEUE, NULL);
+}
+
+GL_APICALL void GL_APIENTRY glUniformMatrix4fv (GLint location, GLsizei count, GLboolean transpose, const GLfloat *value) {
+    //for now we omit transpose
+    float *currentLocation = &currentProgram->constantBuffer[location * 4];
+
+    memcpy(currentLocation, value, sizeof(float) * 4 * 4 * count);
+
+    update_constant_buffer(currentProgram);
 }
 
 void windows_flush() {
