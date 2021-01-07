@@ -471,8 +471,6 @@ static size_t currentProgramObject = 1;
 
 //TODO create hash map
 
-static GLuint arrayBufferObject = -1;
-static GLuint elementArrayBufferObject = -1;
 static GLuint currentVertexArrayObject = -1;
 
 static uint32_t alloc_opengl_buffer() {
@@ -644,12 +642,15 @@ GL_APICALL void GL_APIENTRY glGenVertexArrays (GLsizei n, GLuint *arrays) {
 
     for(size_t i = 0; i < n; i++) {
         arrays[i] = alloc_opengl_vertex_array();
-        get_vertex_array_from_index(arrays[i])->isDirt = GL_TRUE;
-        get_vertex_array_from_index(arrays[i])->enabledVertexAttribArrays = 0;
-        get_vertex_array_from_index(arrays[i])->bufferObject = 0;
-        get_vertex_array_from_index(arrays[i])->arrayBufferObject = 0;
-        get_vertex_array_from_index(arrays[i])->elementArrayBufferObject = 0;
-        memset(get_vertex_array_from_index(arrays[i])->attribs, 0, sizeof(gl_attrib_object_t) * 32);
+        gl_vertex_array_object_t *vao = get_vertex_array_from_index(arrays[i]);
+        vao->isDirt = GL_TRUE;
+        vao->enabledVertexAttribArrays = 0;
+        vao->bufferObject = 0;
+        vao->arrayBufferObject = 0;
+        vao->elementArrayBufferObject = 0;
+        memset(vao->attribs, 0, sizeof(gl_attrib_object_t) * 32);
+        vao->attribsDirt = GL_TRUE;
+        vao->attribsResource = 0;
     }
 }
 
@@ -665,6 +666,7 @@ GL_APICALL void GL_APIENTRY glBindVertexArray (GLuint array) {
 GL_APICALL void GL_APIENTRY glEnableVertexAttribArray (GLuint index) {
     if(currentVertexArrayObject == -1) return;
     gl_vertex_array_object_t *vao = get_vertex_array_from_index(currentVertexArrayObject);
+    if(!vao) return;
 
     if(index >= 32) return;
 
@@ -678,6 +680,7 @@ GL_APICALL void GL_APIENTRY glVertexAttribPointer (GLuint index, GLint size, GLe
     if(currentVertexArrayObject == -1) return;
 
     gl_vertex_array_object_t *vao = get_vertex_array_from_index(currentVertexArrayObject);
+    if(!vao) return;
 
     if(index >= 32) return;
 
@@ -695,16 +698,12 @@ GL_APICALL void GL_APIENTRY glVertexAttribPointer (GLuint index, GLint size, GLe
 }
 
 GL_APICALL void GL_APIENTRY glDrawArrays (GLenum mode, GLint first, GLsizei count) {
-    if(currentVertexArrayObject == -1 || arrayBufferObject == -1) return;
+    if(currentVertexArrayObject == -1 || currentVertexArrayObject == -1) return;
 
     gl_vertex_array_object_t *vao = get_vertex_array_from_index(currentVertexArrayObject);
-    gl_buffer_object_t *vbo;
-    if(currentVertexArrayObject) {
-        gl_vertex_array_object_t *currVAO = get_vertex_array_from_index(currentVertexArrayObject);
-
-        vbo = get_buffer_from_index(currVAO->arrayBufferObject);
-    } else
-        vbo = get_buffer_from_index(arrayBufferObject);
+    if(!vao) return;
+    gl_buffer_object_t *vbo = get_buffer_from_index(vao->arrayBufferObject);
+    if(!vbo) return;
 
     if(vao->isDirt == GL_TRUE) {
         uint32_t *parameters = NULL;
@@ -755,9 +754,11 @@ GL_APICALL void GL_APIENTRY glDrawElements (GLenum mode, GLsizei count, GLenum t
     if(currentVertexArrayObject == -1) return;
 
     gl_vertex_array_object_t *vao = get_vertex_array_from_index(currentVertexArrayObject);
+    if(!vao) return;
 
     gl_buffer_object_t *vbo = get_buffer_from_index(vao->arrayBufferObject);
     gl_buffer_object_t *ebo = get_buffer_from_index(vao->elementArrayBufferObject);
+    if(!vao || !ebo) return;
 
     if(vao->isDirt == GL_TRUE) {
         uint32_t *parameters = NULL;
@@ -832,43 +833,29 @@ GL_APICALL void GL_APIENTRY glBindBuffer (GLenum target, GLuint buffer) {
 
     bufferObj->bind = target;
 
-    //TODO: Check if this is needed here, maybe it's trash code
+    gl_vertex_array_object_t *vao = get_vertex_array_from_index(currentVertexArrayObject);
+    if(!vao) return;
+
     if(target == GL_ARRAY_BUFFER) {
-        arrayBufferObject = buffer;
+        vao->arrayBufferObject = buffer;
     } else if(target == GL_ELEMENT_ARRAY_BUFFER) {
-        elementArrayBufferObject = buffer;
+        vao->elementArrayBufferObject = buffer;
     }
-
-    //if a vao is binded the save it on the vao
-
-    if(currentVertexArrayObject) {
-        gl_vertex_array_object_t *currVAO = get_vertex_array_from_index(currentVertexArrayObject);
-
-        if(target == GL_ARRAY_BUFFER) {
-            currVAO->arrayBufferObject = buffer;
-        } else if(target == GL_ELEMENT_ARRAY_BUFFER) {
-            currVAO->elementArrayBufferObject = buffer;
-        }
-    } //if not i need to read the docs
 }
 
 //TODO: Finish this
 GL_APICALL void GL_APIENTRY glBufferData (GLenum target, GLsizeiptr size, const void *data, GLenum usage) { // Unused usage for now
-    gl_buffer_object_t *currObj = NULL;
+    if(currentVertexArrayObject == -1) return;
     
-    if(currentVertexArrayObject) {
-        gl_vertex_array_object_t *currVAO = get_vertex_array_from_index(currentVertexArrayObject);
+    gl_buffer_object_t *currObj = NULL;
 
-        if(target == GL_ARRAY_BUFFER)
-            currObj = get_buffer_from_index(currVAO->arrayBufferObject);
-        else if(target == GL_ELEMENT_ARRAY_BUFFER)
-            currObj = get_buffer_from_index(currVAO->elementArrayBufferObject);
-    } else { // TODO, i think this is not correct
-        if(target == GL_ARRAY_BUFFER)
-            currObj = get_buffer_from_index(arrayBufferObject);
-        else if(target == GL_ELEMENT_ARRAY_BUFFER)
-            currObj = get_buffer_from_index(elementArrayBufferObject);
-    }
+    gl_vertex_array_object_t *vao = get_vertex_array_from_index(currentVertexArrayObject);
+    if(!vao) return;
+
+    if(target == GL_ARRAY_BUFFER)
+        currObj = get_buffer_from_index(vao->arrayBufferObject);
+    else if(target == GL_ELEMENT_ARRAY_BUFFER)
+        currObj = get_buffer_from_index(vao->elementArrayBufferObject);
     
     if(!currObj) return;
 
