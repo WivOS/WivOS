@@ -141,10 +141,10 @@ struct block_meta {
 volatile void *global_base = NULL;
 
 struct block_meta *find_free_block(struct block_meta **last, size_t size) {
-    struct block_meta *current = global_base;
+    struct block_meta *current = (struct block_meta *)global_base;
     while (current && !(current->free && current->size >= size)) {
         *last = current;
-        current = current->next;
+        current = (struct block_meta *)current->next;
     }
     return current;
 }
@@ -187,7 +187,7 @@ void *malloc(size_t size) {
         }
         global_base = block;
     } else {
-        struct block_meta *last = global_base;
+        struct block_meta *last = (struct block_meta *)global_base;
         block = find_free_block(&last, size);
         if (!block) { // Failed to find free block.
         block = request_space(last, size);
@@ -600,6 +600,91 @@ struct vertex {
    float color[4];
 };
 
+static void load_model(const char *name, struct vertex **_vertexList, uint32_t **_indexList, size_t *_vertexCount, size_t *_indexCount) {
+    size_t object = fopen((char *)name, 0);
+
+    struct vertex *vertexList = malloc(sizeof(struct vertex) * 100);
+    size_t vertexCount = 0;
+    uint32_t *indexList = malloc(sizeof(uint32_t) * 300);
+    size_t indexCount = 0;
+
+    size_t objectSize = fseek(object, 0, SEEK_END);
+    fseek(object, 0, SEEK_SET);
+
+    char *strBuffer = malloc(objectSize);
+    fread(object, strBuffer, objectSize);
+    char *tempBuffer2 = strBuffer;
+
+    while(true) {
+        switch(*strBuffer) {
+            case '#': case 'o': case 's': case '\n': case ' ':
+                {
+                    while(*strBuffer != '\n') strBuffer++;
+                    strBuffer++;
+                }
+                break;
+            case 'v':
+                {
+                    strBuffer += 2;
+                    float v1 = strtof(strBuffer);
+                    while(*strBuffer != ' ') strBuffer++;
+                    strBuffer++;
+                    float v2 = strtof(strBuffer);
+                    while(*strBuffer != ' ') strBuffer++;
+                    strBuffer++;
+                    float v3 = strtof(strBuffer);
+                    while(*strBuffer != '\n') strBuffer++;
+                    strBuffer++;
+                    vertexList = realloc(vertexList, (vertexCount + 1) * sizeof(struct vertex));
+                    //printf("Vertex: %ld %ld, %ld, %ld\n", vertexCount, (int64_t)v1, (int64_t)v2, (int64_t)v3);
+                    vertexList[vertexCount].position[0] = v1;
+                    vertexList[vertexCount].position[1] = v2;
+                    vertexList[vertexCount].position[2] = v3;
+                    vertexList[vertexCount].position[3] = 1.0f;
+                    
+                    float totally = ((v1 > 0 ? v1 : -v1) + (v2 > 0 ? v2 : -v2) + (v3 > 0 ? v3 : -v3));
+                    float v1percent = (v1 > 0 ? v1 : -v1) / totally;
+                    float v2percent = (v2 > 0 ? v2 : -v2) / totally;
+                    float v3percent = (v3 > 0 ? v3 : -v3) / totally;
+
+                    vertexList[vertexCount].color[0] = v1percent; //(v1 > half) ? 1.0f : 0.0f;
+                    vertexList[vertexCount].color[1] = v2percent; //(v2 > half) ? 1.0f : 0.0f;
+                    vertexList[vertexCount].color[2] = v3percent; //(v3 > half) ? 1.0f : 0.0f;
+                    vertexList[vertexCount].color[3] = 1.0f;
+                    vertexCount++;
+                }
+                break;
+            case 'f':
+                {
+                    strBuffer += 2;
+                    uint32_t f1 = strtof(strBuffer);
+                    while(*strBuffer != ' ') strBuffer++;
+                    strBuffer++;
+                    uint32_t f2 = strtof(strBuffer);
+                    while(*strBuffer != ' ') strBuffer++;
+                    strBuffer++;
+                    uint32_t f3 = strtof(strBuffer);
+                    while(*strBuffer != '\n') strBuffer++;
+                    strBuffer++;
+                    indexList = realloc(indexList, (indexCount + 1) * 3 * sizeof(uint32_t));
+                    //printf("Triangle: %ld %d, %d, %d\n", indexCount, (uint32_t)f1, (uint32_t)f2, (uint32_t)f3);
+                    indexList[(indexCount * 3) + 0] = f1 - 1;
+                    indexList[(indexCount * 3) + 1] = f2 - 1;
+                    indexList[(indexCount * 3) + 2] = f3 - 1;
+                    indexCount++;
+                }
+                break;
+        }
+        if(*strBuffer == 0 || strBuffer >= (tempBuffer2 + objectSize)) break;
+    }
+    printf("%lx %lx\n", vertexList, indexList);
+
+    *_vertexList = vertexList;
+    *_indexList = indexList;
+    *_vertexCount = vertexCount;
+    *_indexCount = indexCount;
+}
+
 #define FORCE_EVAL(x) do {                        \
 	if (sizeof(x) == sizeof(float)) {         \
 		volatile float __attribute__((unused)) __x;               \
@@ -850,83 +935,26 @@ int main() {
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    size_t object = fopen("/teapot.obj", 0);
-
-    struct vertex *vertexList = malloc(sizeof(struct vertex) * 100);
+    struct vertex *vertexList;
     size_t vertexCount = 0;
-    uint32_t *indexList = malloc(sizeof(uint32_t) * 300);
+    uint32_t *indexList;
     size_t indexCount = 0;
 
-    size_t objectSize = fseek(object, 0, SEEK_END);
-    fseek(object, 0, SEEK_SET);
+    struct vertex *vertexList2;
+    size_t vertexCount2 = 0;
+    uint32_t *indexList2;
+    size_t indexCount2 = 0;
 
-    char *strBuffer = malloc(objectSize);
-    fread(object, strBuffer, objectSize);
-    char *tempBuffer2 = strBuffer;
+    load_model("/teapot.obj", &vertexList, &indexList, &vertexCount, &indexCount);
+    load_model("/untitled2.obj", &vertexList2, &indexList2, &vertexCount2, &indexCount2);
 
-    while(true) {
-        switch(*strBuffer) {
-            case '#': case 'o': case 's': case '\n': case ' ':
-                {
-                    while(*strBuffer != '\n') strBuffer++;
-                    strBuffer++;
-                }
-                break;
-            case 'v':
-                {
-                    strBuffer += 2;
-                    float v1 = strtof(strBuffer);
-                    while(*strBuffer != ' ') strBuffer++;
-                    strBuffer++;
-                    float v2 = strtof(strBuffer);
-                    while(*strBuffer != ' ') strBuffer++;
-                    strBuffer++;
-                    float v3 = strtof(strBuffer);
-                    while(*strBuffer != '\n') strBuffer++;
-                    strBuffer++;
-                    vertexList = realloc(vertexList, (vertexCount + 1) * sizeof(struct vertex));
-                    //printf("Vertex: %ld %ld, %ld, %ld\n", vertexCount, (int64_t)v1, (int64_t)v2, (int64_t)v3);
-                    vertexList[vertexCount].position[0] = v1;
-                    vertexList[vertexCount].position[1] = v2;
-                    vertexList[vertexCount].position[2] = v3;
-                    vertexList[vertexCount].position[3] = 1.0f;
-                    
-                    float totally = ((v1 > 0 ? v1 : -v1) + (v2 > 0 ? v2 : -v2) + (v3 > 0 ? v3 : -v3));
-                    float v1percent = (v1 > 0 ? v1 : -v1) / totally;
-                    float v2percent = (v2 > 0 ? v2 : -v2) / totally;
-                    float v3percent = (v3 > 0 ? v3 : -v3) / totally;
-
-                    vertexList[vertexCount].color[0] = v1percent; //(v1 > half) ? 1.0f : 0.0f;
-                    vertexList[vertexCount].color[1] = v2percent; //(v2 > half) ? 1.0f : 0.0f;
-                    vertexList[vertexCount].color[2] = v3percent; //(v3 > half) ? 1.0f : 0.0f;
-                    vertexList[vertexCount].color[3] = 1.0f;
-                    vertexCount++;
-                }
-                break;
-            case 'f':
-                {
-                    strBuffer += 2;
-                    uint32_t f1 = strtof(strBuffer);
-                    while(*strBuffer != ' ') strBuffer++;
-                    strBuffer++;
-                    uint32_t f2 = strtof(strBuffer);
-                    while(*strBuffer != ' ') strBuffer++;
-                    strBuffer++;
-                    uint32_t f3 = strtof(strBuffer);
-                    while(*strBuffer != '\n') strBuffer++;
-                    strBuffer++;
-                    indexList = realloc(indexList, (indexCount + 1) * 3 * sizeof(uint32_t));
-                    //printf("Triangle: %ld %d, %d, %d\n", indexCount, (uint32_t)f1, (uint32_t)f2, (uint32_t)f3);
-                    indexList[(indexCount * 3) + 0] = f1 - 1;
-                    indexList[(indexCount * 3) + 1] = f2 - 1;
-                    indexList[(indexCount * 3) + 2] = f3 - 1;
-                    indexCount++;
-                }
-                break;
-        }
-        if(*strBuffer == 0 || strBuffer >= (tempBuffer2 + objectSize)) break;
-    }
-    printf("%lx %lx\n", vertexList, indexList);
+    GLuint VAO;
+    glGenVertexArrays(1, &VAO);
+    glBindVertexArray(VAO);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, 0, NULL);
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, 0, (void*)(4 * sizeof(GLfloat)));
 
     GLuint VBO;
     glGenBuffers(1, &VBO);
@@ -939,13 +967,23 @@ int main() {
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(uint32_t) * 3 * indexCount, indexList, GL_STATIC_DRAW);
 
-    GLuint VAO;
-    glGenVertexArrays(1, &VAO);
-    glBindVertexArray(VAO);
+    GLuint VAO2;
+    glGenVertexArrays(1, &VAO2);
+    glBindVertexArray(VAO2);
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, 0, NULL);
     glEnableVertexAttribArray(1);
     glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, 0, (void*)(4 * sizeof(GLfloat)));
+
+    GLuint VBO2;
+    glGenBuffers(1, &VBO2);
+    glBindBuffer(GL_ARRAY_BUFFER, VBO2);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(struct vertex) * vertexCount2, vertexList2, GL_STATIC_DRAW);
+
+    GLuint EBO2;
+    glGenBuffers(1, &EBO2);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO2);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(uint32_t) * 3 * indexCount2, indexList2, GL_STATIC_DRAW);
 
     windows_flush();
 
@@ -1050,11 +1088,11 @@ int main() {
     "}";
 
     GLuint vShader = glCreateShader(GL_VERTEX_SHADER);
-    glShaderSource(vShader, 1, &glslVertex, NULL);
+    glShaderSource(vShader, 1, (const GLchar * const*)&glslVertex, NULL);
     glCompileShader(vShader);
 
     GLuint fShader = glCreateShader(GL_FRAGMENT_SHADER);
-    glShaderSource(fShader, 1, &glslFragment, NULL);
+    glShaderSource(fShader, 1, (const GLchar * const*)&glslFragment, NULL);
     glCompileShader(fShader);
 
     GLuint programID = glCreateProgram();
@@ -1143,8 +1181,8 @@ int main() {
     glUniformMatrix4fv(glGetUniformLocation(programID, "trMat"), 1, GL_FALSE, trMat);
     glUniformMatrix4fv(glGetUniformLocation(programID, "rotMat"), 1, GL_FALSE, rotMat);
 
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
-    glDrawElements(GL_TRIANGLES, indexCount, GL_UNSIGNED_INT, 0);
+    glBindVertexArray(VAO);
+    glDrawElements(GL_TRIANGLES, indexCount * 3, GL_UNSIGNED_INT, 0);
 
     windows_flush();
 
@@ -1177,6 +1215,7 @@ int main() {
         constants[58] = cosine(angle);*/
 
         trMat[14] -= 0.05f;
+        trMat[12] = 3.00f;
 
         rotMat[0] = cosine(angle);
         rotMat[2] = -sine(angle);
@@ -1191,7 +1230,20 @@ int main() {
         glUniformMatrix4fv(glGetUniformLocation(programID, "trMat"), 1, GL_FALSE, trMat);
         glUniformMatrix4fv(glGetUniformLocation(programID, "rotMat"), 1, GL_FALSE, rotMat);
 
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
+        glBindVertexArray(VAO);
+        glDrawElements(GL_TRIANGLES, indexCount * 3, GL_UNSIGNED_INT, 0);
+
+        trMat[12] = -3.00f;
+
+        rotMat[0] = cosine(angle + 0.785f);
+        rotMat[2] = -sine(angle + 0.785f);
+        rotMat[8] = sine(angle + 0.785f);
+        rotMat[10] = cosine(angle + 0.785f);
+
+        glUniformMatrix4fv(glGetUniformLocation(programID, "trMat"), 1, GL_FALSE, trMat);
+        glUniformMatrix4fv(glGetUniformLocation(programID, "rotMat"), 1, GL_FALSE, rotMat);
+
+        glBindVertexArray(VAO2);
         glDrawElements(GL_TRIANGLES, indexCount * 3, GL_UNSIGNED_INT, 0);
 
         windows_flush();

@@ -35,8 +35,12 @@ typedef struct {
 
 typedef struct {
     uint8_t isDirt;
+    uint8_t attribsDirt;
+    GLuint attribsResource;
     volatile uint32_t enabledVertexAttribArrays;
     GLuint bufferObject;
+    GLuint arrayBufferObject;
+    GLuint elementArrayBufferObject;
     gl_attrib_object_t attribs[32];
 } gl_vertex_array_object_t;
 

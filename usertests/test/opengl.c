@@ -93,6 +93,20 @@ static uint32_t create_opengl_object(size_t gpuNode, uint32_t objectType, uint32
     return objectResourceID;
 }
 
+static void bind_opengl_object(size_t gpuNode, uint32_t objectType, uint32_t resourceID) {
+    virtgpu_3d_command_t command = {0};
+
+    command.command = VIRGL_CCMD_BIND_OBJECT;
+    command.option = objectType;
+    command.length = 1;
+    command.parameters = (uint32_t *)realloc(command.parameters, sizeof(uint32_t) * 1);
+    command.parameters[0] = resourceID; // Ve id
+
+    ioctl(gpuNode, VIRTGPU_IOCTL_ADD_3D_COMMAND_TO_QUEUE, &command);
+
+    free(command.parameters);
+}
+
 static void set_framebuffer_state(size_t gpuNode, uint32_t depthBuffer, uint32_t *surfaces, size_t count) {
     virtgpu_3d_command_t command = {0};
 
@@ -447,22 +461,22 @@ static GLint stencilClearValue = 0;
 
 //------------------------
 static gl_buffer_object_t *bufferObjects = NULL;
-static size_t currentBufferObject = 0;
+static size_t currentBufferObject = 1;
 static gl_vertex_array_object_t *vertexArrays = NULL;
-static size_t currentvertexArray = 0;
+static size_t currentVertexArray = 1;
 static gl_shader_object_t *shaderObjects = NULL;
-static size_t currentShaderObject = 0;
+static size_t currentShaderObject = 1;
 static gl_program_object_t *programObjects = NULL;
-static size_t currentProgramObject = 0;
+static size_t currentProgramObject = 1;
 
 //TODO create hash map
 
-static GLint arrayBufferObject = -1;
-static GLint elementArrayBufferObject = -1;
-static GLint currentVertexArrayObject = -1;
+static GLuint arrayBufferObject = -1;
+static GLuint elementArrayBufferObject = -1;
+static GLuint currentVertexArrayObject = -1;
 
 static uint32_t alloc_opengl_buffer() {
-    bufferObjects = realloc(bufferObjects, sizeof(gl_buffer_object_t *) * (currentBufferObject + 1));
+    bufferObjects = realloc(bufferObjects, sizeof(gl_buffer_object_t) * (currentBufferObject + 1));
     currentBufferObject++;
 
     return (currentBufferObject - 1);
@@ -475,20 +489,20 @@ static gl_buffer_object_t *get_buffer_from_index(uint32_t index) {
 }
 
 static uint32_t alloc_opengl_vertex_array() { // TODO, realloc current variables
-    vertexArrays = realloc(vertexArrays, sizeof(gl_vertex_array_object_t *) * (currentvertexArray + 1));
-    currentvertexArray++;
+    vertexArrays = realloc(vertexArrays, sizeof(gl_vertex_array_object_t) * (currentVertexArray + 1));
+    currentVertexArray++;
 
-    return (currentvertexArray - 1);
+    return (currentVertexArray - 1);
 }
 
 static gl_vertex_array_object_t *get_vertex_array_from_index(uint32_t index) {
-    if(index >= currentvertexArray) return NULL;
+    if(index >= currentVertexArray) return NULL;
 
     return &vertexArrays[index];
 }
 
 static uint32_t alloc_opengl_shader() {
-    shaderObjects = realloc(shaderObjects, sizeof(gl_vertex_array_object_t *) * (currentShaderObject + 1));
+    shaderObjects = realloc(shaderObjects, sizeof(gl_vertex_array_object_t) * (currentShaderObject + 1));
     currentShaderObject++;
 
     return (currentShaderObject - 1);
@@ -501,7 +515,7 @@ static gl_shader_object_t *get_shader_from_index(uint32_t index) {
 }
 
 static uint32_t alloc_opengl_program() {
-    programObjects = realloc(programObjects, sizeof(gl_program_object_t *) * (currentProgramObject + 1));
+    programObjects = realloc(programObjects, sizeof(gl_program_object_t) * (currentProgramObject + 1));
     currentProgramObject++;
 
     return (currentProgramObject - 1);
@@ -632,12 +646,18 @@ GL_APICALL void GL_APIENTRY glGenVertexArrays (GLsizei n, GLuint *arrays) {
         arrays[i] = alloc_opengl_vertex_array();
         get_vertex_array_from_index(arrays[i])->isDirt = GL_TRUE;
         get_vertex_array_from_index(arrays[i])->enabledVertexAttribArrays = 0;
+        get_vertex_array_from_index(arrays[i])->bufferObject = 0;
+        get_vertex_array_from_index(arrays[i])->arrayBufferObject = 0;
+        get_vertex_array_from_index(arrays[i])->elementArrayBufferObject = 0;
+        memset(get_vertex_array_from_index(arrays[i])->attribs, 0, sizeof(gl_attrib_object_t) * 32);
     }
 }
 
 GL_APICALL void GL_APIENTRY glBindVertexArray (GLuint array) {
     gl_vertex_array_object_t *arrayObj = get_vertex_array_from_index(array);
     if(!arrayObj) return;
+
+    arrayObj->isDirt = GL_TRUE;
 
     currentVertexArrayObject = array;
 }
@@ -649,13 +669,15 @@ GL_APICALL void GL_APIENTRY glEnableVertexAttribArray (GLuint index) {
     if(index >= 32) return;
 
     vao->enabledVertexAttribArrays |= (1 << index);
+
+    vao->isDirt = GL_TRUE;
+    vao->attribsDirt = GL_TRUE;
 }
 
 GL_APICALL void GL_APIENTRY glVertexAttribPointer (GLuint index, GLint size, GLenum type, GLboolean normalized, GLsizei stride, const void *pointer) {
-    if(currentVertexArrayObject == -1 || arrayBufferObject == -1) return;
+    if(currentVertexArrayObject == -1) return;
 
     gl_vertex_array_object_t *vao = get_vertex_array_from_index(currentVertexArrayObject);
-    gl_buffer_object_t *vbo = get_buffer_from_index(arrayBufferObject);
 
     if(index >= 32) return;
 
@@ -668,15 +690,21 @@ GL_APICALL void GL_APIENTRY glVertexAttribPointer (GLuint index, GLint size, GLe
     vao->attribs[index].size = size;
     vao->attribs[index].type = type;
     vao->attribs[index].format = format;
-    vao->bufferObject = vbo->bufferObject;
     vao->isDirt = GL_TRUE;
+    vao->attribsDirt = GL_TRUE;
 }
 
 GL_APICALL void GL_APIENTRY glDrawArrays (GLenum mode, GLint first, GLsizei count) {
     if(currentVertexArrayObject == -1 || arrayBufferObject == -1) return;
 
     gl_vertex_array_object_t *vao = get_vertex_array_from_index(currentVertexArrayObject);
-    gl_buffer_object_t *vbo = get_buffer_from_index(arrayBufferObject);
+    gl_buffer_object_t *vbo;
+    if(currentVertexArrayObject) {
+        gl_vertex_array_object_t *currVAO = get_vertex_array_from_index(currentVertexArrayObject);
+
+        vbo = get_buffer_from_index(currVAO->arrayBufferObject);
+    } else
+        vbo = get_buffer_from_index(arrayBufferObject);
 
     if(vao->isDirt == GL_TRUE) {
         uint32_t *parameters = NULL;
@@ -724,11 +752,12 @@ GL_APICALL void GL_APIENTRY glDrawArrays (GLenum mode, GLint first, GLsizei coun
 }
 
 GL_APICALL void GL_APIENTRY glDrawElements (GLenum mode, GLsizei count, GLenum type, const void *indices) {
-    if(currentVertexArrayObject == -1 || arrayBufferObject == -1 || elementArrayBufferObject == -1) return;
+    if(currentVertexArrayObject == -1) return;
 
     gl_vertex_array_object_t *vao = get_vertex_array_from_index(currentVertexArrayObject);
-    gl_buffer_object_t *vbo = get_buffer_from_index(arrayBufferObject);
-    gl_buffer_object_t *ebo = get_buffer_from_index(elementArrayBufferObject);
+
+    gl_buffer_object_t *vbo = get_buffer_from_index(vao->arrayBufferObject);
+    gl_buffer_object_t *ebo = get_buffer_from_index(vao->elementArrayBufferObject);
 
     if(vao->isDirt == GL_TRUE) {
         uint32_t *parameters = NULL;
@@ -742,18 +771,24 @@ GL_APICALL void GL_APIENTRY glDrawElements (GLenum mode, GLsizei count, GLenum t
 
         parameters = (uint32_t *)calloc(1, sizeof(uint32_t) * (4 * enabled_vertex_attribs_count));
 
-        size_t currentIndex = 0;
-        for(currentIndex = 0; (currentIndex < 32 && enabled_vertex_attribs_count > 0); currentIndex++) {
-            if(vao->enabledVertexAttribArrays & (1 << currentIndex)) {
-                enabled_vertex_attribs_count--;
+        if(vao->attribsDirt == GL_TRUE || vao->attribsResource == 0) {
+            size_t currentIndex = 0;
+            for(currentIndex = 0; (currentIndex < 32 && enabled_vertex_attribs_count > 0); currentIndex++) {
+                if(vao->enabledVertexAttribArrays & (1 << currentIndex)) {
+                    enabled_vertex_attribs_count--;
+                }
+                parameters[currentIndex * 4 + 0] = vao->attribs[currentIndex].position; // src offset
+                parameters[currentIndex * 4 + 1] = 0; // instance divisor
+                parameters[currentIndex * 4 + 2] = 0; // vertex buffer index
+                parameters[currentIndex * 4 + 3] = vao->attribs[currentIndex].format; // src format
             }
-            parameters[currentIndex * 4 + 0] = vao->attribs[currentIndex].position; // src offset
-            parameters[currentIndex * 4 + 1] = 0; // instance divisor
-            parameters[currentIndex * 4 + 2] = 0; // vertex buffer index
-            parameters[currentIndex * 4 + 3] = vao->attribs[currentIndex].format; // src format
-        }
 
-        uint32_t vertexElementsID = create_opengl_object(gpuNode, VIRGL_OBJECT_VERTEX_ELEMENTS, parameters, (4 * (currentIndex)), 1);
+            vao->attribsResource = create_opengl_object(gpuNode, VIRGL_OBJECT_VERTEX_ELEMENTS, parameters, (4 * (currentIndex)), 1);
+
+            vao->attribsDirt = GL_FALSE;
+        } else {
+            bind_opengl_object(gpuNode, VIRGL_OBJECT_VERTEX_ELEMENTS, vao->attribsResource);
+        }
 
         //TODO: Check when other VAO is binded
         uint32_t sizeVertex = 0;
@@ -797,21 +832,43 @@ GL_APICALL void GL_APIENTRY glBindBuffer (GLenum target, GLuint buffer) {
 
     bufferObj->bind = target;
 
+    //TODO: Check if this is needed here, maybe it's trash code
     if(target == GL_ARRAY_BUFFER) {
         arrayBufferObject = buffer;
     } else if(target == GL_ELEMENT_ARRAY_BUFFER) {
         elementArrayBufferObject = buffer;
     }
+
+    //if a vao is binded the save it on the vao
+
+    if(currentVertexArrayObject) {
+        gl_vertex_array_object_t *currVAO = get_vertex_array_from_index(currentVertexArrayObject);
+
+        if(target == GL_ARRAY_BUFFER) {
+            currVAO->arrayBufferObject = buffer;
+        } else if(target == GL_ELEMENT_ARRAY_BUFFER) {
+            currVAO->elementArrayBufferObject = buffer;
+        }
+    } //if not i need to read the docs
 }
 
 //TODO: Finish this
 GL_APICALL void GL_APIENTRY glBufferData (GLenum target, GLsizeiptr size, const void *data, GLenum usage) { // Unused usage for now
     gl_buffer_object_t *currObj = NULL;
+    
+    if(currentVertexArrayObject) {
+        gl_vertex_array_object_t *currVAO = get_vertex_array_from_index(currentVertexArrayObject);
 
-    if(target == GL_ARRAY_BUFFER)
-        currObj = get_buffer_from_index(arrayBufferObject);
-    else if(target == GL_ELEMENT_ARRAY_BUFFER)
-        currObj = get_buffer_from_index(elementArrayBufferObject);
+        if(target == GL_ARRAY_BUFFER)
+            currObj = get_buffer_from_index(currVAO->arrayBufferObject);
+        else if(target == GL_ELEMENT_ARRAY_BUFFER)
+            currObj = get_buffer_from_index(currVAO->elementArrayBufferObject);
+    } else { // TODO, i think this is not correct
+        if(target == GL_ARRAY_BUFFER)
+            currObj = get_buffer_from_index(arrayBufferObject);
+        else if(target == GL_ELEMENT_ARRAY_BUFFER)
+            currObj = get_buffer_from_index(elementArrayBufferObject);
+    }
     
     if(!currObj) return;
 
@@ -1005,7 +1062,7 @@ enum { BOOL, INT, UINT, FLOAT, DOUBLE, LAYOUT, UNIFORM, OUT, IN, VEC, MAT };
 
 GL_APICALL GLint GL_APIENTRY glGetUniformLocation (GLuint program, const GLchar *name) {
     gl_program_object_t *programObj = get_program_from_index(program);
-    if(!programObj) return;
+    if(!programObj) return -1;
 
     if(!programObj->uniformSymbols) return -1;
 
@@ -1013,7 +1070,7 @@ GL_APICALL GLint GL_APIENTRY glGetUniformLocation (GLuint program, const GLchar 
     identifier_t *currentId = symbolsTable;
     GLint j = 0;
     while(currentId->token) {
-        if(!strcmp(currentId->name, name) && currentId->variableType == UNIFORM /* In case we missed something */) {
+        if(!strcmp(currentId->name, (char *)name) && currentId->variableType == UNIFORM /* In case we missed something */) {
             return currentId->value; // Precalculated
         }
 
