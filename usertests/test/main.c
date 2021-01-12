@@ -817,6 +817,8 @@ float rotMat[] = {
     0, 0, 0, 1
 };
 
+#include "math.h"
+
 //#define DONT_USE_EBO
 
 int main() {
@@ -1217,10 +1219,13 @@ int main() {
         trMat[14] -= 0.05f;
         trMat[12] = 3.00f;
 
-        rotMat[0] = cosine(angle);
+        /*rotMat[0] = cosine(angle);
         rotMat[2] = -sine(angle);
         rotMat[8] = sine(angle);
-        rotMat[10] = cosine(angle);
+        rotMat[10] = cosine(angle);*/
+
+        math_init_mat4((mat4_t *)rotMat);
+        math_apply_rotation_mat4((mat4_t *)rotMat, angle, (vec3_t){0, 1, 0});
 
         /*send_inline_write(gpuNode, resourceUniform, 0, (1 << 1), (virtio_box_t){
             0, 0, 0,
@@ -1235,10 +1240,8 @@ int main() {
 
         trMat[12] = -3.00f;
 
-        rotMat[0] = cosine(angle + 0.785f);
-        rotMat[2] = -sine(angle + 0.785f);
-        rotMat[8] = sine(angle + 0.785f);
-        rotMat[10] = cosine(angle + 0.785f);
+        math_init_mat4((mat4_t *)rotMat);
+        math_apply_rotation_mat4((mat4_t *)rotMat, angle + 0.785f, (vec3_t){0, 1, 0});
 
         glUniformMatrix4fv(glGetUniformLocation(programID, "trMat"), 1, GL_FALSE, trMat);
         glUniformMatrix4fv(glGetUniformLocation(programID, "rotMat"), 1, GL_FALSE, rotMat);

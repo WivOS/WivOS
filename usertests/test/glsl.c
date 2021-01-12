@@ -11,7 +11,7 @@ enum {
     Assign, Cond, Lor, Lan, Or, Xor, And, Eq, Ne, Lt, Gt, Le, Ge, Shl, Shr, Add, Sub, Mul, Div, Mod, Inc, Dec, Brak
 };
 
-enum { BOOL, INT, UINT, FLOAT, DOUBLE, LAYOUT, UNIFORM, OUT, IN, VEC, MAT };
+enum { BOOL, INT, UINT, FLOAT, DOUBLE, LAYOUT, UNIFORM, SAMPLER, OUT, IN, VEC, MAT };
 int *idMain;
 
 double tokenVal;
@@ -43,6 +43,7 @@ uint64_t assignRight = 0;
 uint64_t immPosition = 0;
 
 bool justCopy = 0;
+bool justTexture = 0;
 uint64_t returnVariable = 0;
 
 void next() {
@@ -276,6 +277,9 @@ void expression(int64_t level) {
                         //vec1 vec2 vec3 function, just copy the temp register
                         justCopy = 1;
                     }
+                    if(!strcmp(id->name, "texture")) {
+                        justTexture = 1;
+                    }
                     //TODO
                 } else if(id->class == Fun) {
                     //TODO
@@ -310,6 +314,7 @@ void expression(int64_t level) {
                 exprType = id->type;
                 assignRight = 0;
                 justCopy = 0;
+                justTexture = 0;
             } else if (id->class == Num) {
                 exprType = INT;
                 assignRight = 0;
@@ -338,6 +343,27 @@ void expression(int64_t level) {
                                     assignRight++;
                                     break;
                             }
+                        }
+                    } else if(assignRight && justTexture && (id->variableType == IN || id->variableType == UNIFORM)) {
+                        if(assignRight == 2)
+                            tempVariable++;
+                        else {
+                            //TODO: error checking
+                        }
+                        if(id->vecSize > 0) {
+                            switch(id->vecSize) {
+                                case 2:
+                                    codeStringPos += sprintf(codeStringPos, "  %d: MOV TEMP[%d].xy, IN[%d].xyxx\n", codeLine++, (tempVariable - 1), id->value);
+                                    break;
+                                default:
+                                    printf("Variable not a vec2\n");
+                                    while(1);
+                                    break;
+                            }
+                        } else if(id->type == SAMPLER) { // 2D for now
+                            tempVariable++;
+                            codeStringPos += sprintf(codeStringPos, "  %d: TEX TEMP[%d], TEMP[%d], SAMP[%d], 2D\n", codeLine++, (tempVariable - 1), (tempVariable - 2), id->value);
+                            returnVariable = (tempVariable - 1);
                         }
                     } else if(id->variableType == IN || id->variableType == LAYOUT) {
                         tempVariable++;
@@ -781,6 +807,7 @@ char *compile_glsl_vertex(const char *string, bool preserveLastUniformData, bool
     immPosition = 0;
 
     justCopy = 0;
+    justTexture = 0;
     returnVariable = 0;
 
     line = 1;
@@ -802,7 +829,7 @@ char *compile_glsl_vertex(const char *string, bool preserveLastUniformData, bool
     outData++; // gl_Position
 
     src = "bool else if int uint float double layout uniform out in return while "
-          "void main gl_Position vec4";
+          "void main gl_Position vec4 texture";
 
     int64_t i = Bool;
     while(i <= While) {
@@ -815,6 +842,7 @@ char *compile_glsl_vertex(const char *string, bool preserveLastUniformData, bool
     next(); currentId->class = Glo;
     currentId->type = VEC; // TODO Vectors
     currentId->vecSize = 4;
+    next(); currentId->class = Sys;
     next(); currentId->class = Sys;
 
     src = oldSrc = strdup(string);
@@ -903,6 +931,7 @@ char *compile_glsl_fragment(const char *string, bool preserveLastUniformData, bo
     immPosition = 0;
 
     justCopy = 0;
+    justTexture = 0;
     returnVariable = 0;
 
     line = 1;
@@ -923,7 +952,7 @@ char *compile_glsl_fragment(const char *string, bool preserveLastUniformData, bo
     preDeclarationStringPos += sprintf(preDeclarationStringPos, "FRAG\n"); // Adapt this
 
     src = "bool else if int uint float double layout uniform out in return while "
-          "void main vec4";
+          "void main vec4 texture";
 
     int64_t i = Bool;
     while(i <= While) {
@@ -933,6 +962,7 @@ char *compile_glsl_fragment(const char *string, bool preserveLastUniformData, bo
 
     next(); currentId->token = Bool;
     next(); idMain = (int *)currentId;
+    next(); currentId->class = Sys;
     next(); currentId->class = Sys;
 
     src = oldSrc = strdup(string);
