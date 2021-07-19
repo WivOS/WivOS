@@ -4,6 +4,8 @@
             "name": "Linux",
             "includePath": [
                 "${workspaceFolder}/**",
+                "${workspaceFolder}/clib/source/include/**",
+                "${workspaceFolder}/clib/source/include/**",
                 "${workspaceFolder}/kernel/**"
             ],
             "defines": [],

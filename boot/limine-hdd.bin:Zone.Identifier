@@ -1,0 +1,4 @@
+[ZoneTransfer]
+ZoneId=3
+ReferrerUrl=https://github.com/limine-bootloader/limine/blob/v2.34-binary/limine-hdd.bin
+HostUrl=https://raw.githubusercontent.com/limine-bootloader/limine/v2.34-binary/limine-hdd.bin

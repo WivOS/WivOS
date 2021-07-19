@@ -82,8 +82,9 @@ void pmm_init(stivale2_struct_t *stivale) {
         switch(entry->type) {
             case USABLE: 
                 {
-                    uint64_t start = entry->base;
-                    uint64_t length = entry->length;
+                    uint64_t start = ROUND_UP(entry->base, PAGE_SIZE);
+                    uint64_t length = ROUND_UP(entry->length, PAGE_SIZE);
+                    if(!length) continue;
                     if(start + length < 0x2000000ULL) continue;
 
                     if(start < 0x2000000ULL) {

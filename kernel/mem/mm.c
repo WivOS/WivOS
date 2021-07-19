@@ -8,7 +8,8 @@ typedef struct header {
 } header_t;
 
 void *kmalloc(size_t size) {
-    size_t page_size = (size + PAGE_SIZE - 1) / PAGE_SIZE;
+    size_t page_size = size / PAGE_SIZE;
+    if(size % PAGE_SIZE) page_size++;
 
     char *ret = pmm_alloc(page_size + 1);
 

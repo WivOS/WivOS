@@ -3,10 +3,32 @@
 #include <stdatomic.h>
 #include <stdbool.h>
 
+#define locked_read(type, var) ({ \
+    type ret = 0; \
+    asm volatile ( \
+        "lock xaddl %0, %1;" \
+        : "+r" (ret), "+m" (*(var)) \
+        : \
+        : "memory" \
+    ); \
+    ret; \
+})
+
+#define locked_write(type, var, val) ({ \
+    type ret = val; \
+    asm volatile ( \
+        "lock xchgq %0, %1;" \
+        : "+r" ((ret)), "+m" (*(var)) \
+        : \
+        : "memory" \
+    ); \
+    ret; \
+})
+
 #define locked_inc(var) ({ \
     int ret; \
     asm volatile ( \
-        "lock inc %1;" \
+        "lock incl %1;" \
         : "=@ccnz" (ret) \
         : "m" (*(var)) \
         : "memory" \
@@ -17,7 +39,7 @@
 #define locked_dec(var) ({ \
     int ret; \
     asm volatile ( \
-        "lock dec %1;" \
+        "lock decl %1;" \
         : "=@ccnz" (ret) \
         : "m" (*(var)) \
         : "memory" \

@@ -3,5 +3,21 @@
     "twitchChat.username": "StartForKiller",
     "twitchChat.channel": "startforkiller",
     // Optional: Set the amount of chatmessages that are shown
-    "twitchChat.historysize": 20
+    "twitchChat.historysize": 20,
+    "git.ignoreLimitWarning": true,
+    "files.associations": {
+        "unordered_map": "c",
+        "unordered_set": "c",
+        "*.x": "c",
+        "tty.h": "c",
+        "internet": "c",
+        "regex": "c",
+        "random": "c",
+        "charconv": "c",
+        "*.inc": "c",
+        "devfs.h": "c",
+        "buffer": "c",
+        "string_view": "c",
+        "rope": "c"
+    }
 }

@@ -1,5 +1,6 @@
 #include "pci.h"
 #include <lai/helpers/pci.h>
+#include "../proc/smp.h"
 
 static list_t *pciList = NULL;
 
@@ -203,12 +204,38 @@ size_t pci_read_bar(pci_device_t *device, int bar, pci_bar_t *out) {
     return 0;
 }
 
+union msi_address_t {
+    struct {
+        uint32_t _reserved0 : 2;
+        uint32_t destination_mode : 1;
+        uint32_t redirection_hint : 1;
+        uint32_t _reserved1 : 8;
+        uint32_t destination_id : 8;
+        // must be 0xFEE
+        uint32_t base_address : 12;
+    };
+    uint32_t raw;
+} __attribute__((packed));
+
+union msi_data_t {
+    struct {
+        uint32_t vector : 8;
+        uint32_t delivery_mode : 3;
+        uint32_t _reserved0 : 3;
+        uint32_t level : 1;
+        uint32_t trigger_mode : 1;
+        uint32_t _reserved1 : 16;
+    };
+    uint32_t raw;
+} __attribute__((packed));
+
 size_t pci_register_msi(pci_device_t *device, uint8_t vector) {
     uint8_t off = 0;
 
     uint32_t config_4 = pci_read_dword(device, 0x4);
     uint8_t  config_34 = pci_read_byte(device, 0x34);
 
+    printf("%x\n", config_4);
     if((config_4 >> 16) & (1 << 4)) {
         uint8_t cap_off = config_34;
 
@@ -216,6 +243,7 @@ size_t pci_register_msi(pci_device_t *device, uint8_t vector) {
             uint8_t cap_id = pci_read_byte(device, cap_off);
             uint8_t cap_next = pci_read_byte(device, cap_off + 1);
 
+            printf("%x\n", cap_id);
             switch(cap_id) {
                 case 0x05: {
                     printf("pci: device has msi support\n");
@@ -232,6 +260,32 @@ size_t pci_register_msi(pci_device_t *device, uint8_t vector) {
         return 0;
     }
 
+    uint16_t msiOpts = pci_read_word(device, off + 0x2);
+    if(msiOpts & (1 << 7)) {
+        union msi_data_t data = {0};
+        union msi_address_t addr = {0};
+        addr.raw = pci_read_word(device, off + 0x4);
+        data.raw = pci_read_word(device, off + 0xC);
+        data.vector = vector;
+        data.delivery_mode = 0;
+        addr.base_address = 0xFEE;
+        addr.destination_id = cpuLocals[current_cpu].lapicId;
+        pci_write_dword(device, off + 0x4, addr.raw);
+        pci_write_dword(device, off + 0xC, data.raw);
+    } else {
+        union msi_data_t data = {0};
+        union msi_address_t addr = {0};
+        addr.raw = pci_read_word(device, off + 0x4);
+        data.raw = pci_read_word(device, off + 0x8);
+        data.vector = vector;
+        data.delivery_mode = 0;
+        addr.base_address = 0xFEE;
+        addr.destination_id = cpuLocals[current_cpu].lapicId;
+        pci_write_dword(device, off + 0x4, addr.raw);
+        pci_write_dword(device, off + 0x8, data.raw);
+    }
+    msiOpts |= 1;
+    pci_write_word(device, off + 0x2, msiOpts);
     return 1;
 }
 
@@ -336,7 +390,7 @@ void pci_init() {
         for(size_t j = 0; j < 8; j++) {
             device.function = j;
             if(pci_get_vendorID(&device) == 0xFFFF) {
-                return;
+                continue;
             }
 
             pci_check_bus(j, -1);

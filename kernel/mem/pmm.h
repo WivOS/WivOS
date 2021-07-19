@@ -4,6 +4,9 @@
 #define VIRT_KRNL_BASE 0xFFFFFFFF80000000UL
 #define PAGE_SIZE 0x1000
 
+#define ROUND_UP(N, S) ((((N) + (S) - 1) / (S)) * (S))
+#define ROUND_DOWN(N,S) ((N / S) * S)
+
 #include <boot/stivale2.h>
 #include <stdint.h>
 #include <stddef.h>

@@ -289,3 +289,7 @@ extern void isr252(void);
 extern void isr253(void);
 extern void isr254(void);
 extern void isr255(void);
+
+extern idt_fn_t irq_functions[0x40];
+
+void connectDeviceToPin(uint8_t pin, idt_fn_t device, uint16_t flags);

@@ -9,7 +9,7 @@ size_t vfs_read(vfs_node_t *node, char *buffer, size_t size) {
 }
 
 size_t vfs_write(vfs_node_t *node, char *buffer, size_t size) {
-    if(!node || !node->functions.read) return -1;
+    if(!node || !node->functions.write) return -1;
     return node->functions.write((struct vfs_node *)node, buffer, size);
 }
 
@@ -43,6 +43,26 @@ vfs_node_t *vfs_finddir(vfs_node_t *node, char *name) {
 size_t vfs_ioctl(vfs_node_t *node, size_t requestType, void *argp) {
     if(!node || !node->functions.ioctl) return -1;
     return node->functions.ioctl((struct vfs_node *)node, requestType, argp);
+}
+
+size_t vfs_isatty(vfs_node_t *node) {
+    if(!node || !node->functions.isatty) return -1;
+    return node->functions.isatty((struct vfs_node *)node);
+}
+
+size_t vfs_tcflow(vfs_node_t *node, int action) {
+    if(!node || !node->functions.tcflow) return -1;
+    return node->functions.tcflow((struct vfs_node *)node, action);
+}
+
+size_t vfs_tcsetattr(vfs_node_t *node, int optional_actions, struct termios *termios_p) {
+    if(!node || !node->functions.tcsetattr) return -1;
+    return node->functions.tcsetattr((struct vfs_node *)node, optional_actions, termios_p);
+}
+
+size_t vfs_tcgetattr(vfs_node_t *node, struct termios *termios_p) {
+    if(!node || !node->functions.tcgetattr) return -1;
+    return node->functions.tcgetattr((struct vfs_node *)node, termios_p);
 }
 
 // Utils

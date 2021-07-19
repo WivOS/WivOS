@@ -65,6 +65,8 @@ isr_fn_t handlers[256] = {
 	isr248, isr249, isr250, isr251, isr252, isr253, isr254, isr255,
 };
 
+idt_fn_t irqPins[4][10]; //Support 10 devices per pin
+
 void dispatch_interrupt(irq_regs_t *regs) {
     if(regs->int_no < 0x20) {
         printf("[IRQ] Unknown system interrupt 0x%x received, error: 0x%lx, RIP: 0x%lx\n", regs->int_no, regs->err, regs->rip);
@@ -77,11 +79,14 @@ void dispatch_interrupt(irq_regs_t *regs) {
             printf("CR2: %lx\n", cr2);
             while(1) { asm volatile("hlt"); }
         }
-    } else if(regs->int_no == 0x41) {
-        lapic_write(0xB0, 0);
-        irq_functions[0x21](regs);
     } else if((sizeof(irq_functions) / sizeof(idt_fn_t)) > (regs->int_no - 0x20) && irq_functions[(regs->int_no - 0x20)]) {
         irq_functions[(regs->int_no - 0x20)](regs); // handle this manually
+        lapic_write(0xB0, 0);
+    } else if(regs->int_no >= 0x90 && regs->int_no < 0x93) {
+        for(int i = 0; i < 10; i++) {
+            if(irqPins[regs->int_no - 0x90][i] == NULL) break;
+            irqPins[regs->int_no - 0x90][i](regs);
+        }
         lapic_write(0xB0, 0);
     } else {
         printf("[IRQ] Interrupt 0x%x received but not handled\n", regs->int_no);
@@ -93,7 +98,7 @@ void dispatch_interrupt(irq_regs_t *regs) {
 
 extern void int_handler();
 
-static size_t pit_count = 0;
+volatile size_t pit_count = 0;
 extern int sched_ready;
 extern size_t processors_count;
 void pit_handler(thread_regs_t *regs) {
@@ -143,4 +148,25 @@ void idt_init() {
     lidt(&idtPointer);
 
     irq_functions[0] = (idt_fn_t)pit_handler;
+}
+
+uint8_t lapicSetted = 0;
+
+void connectDeviceToPin(uint8_t pin, idt_fn_t device, uint16_t flags) {
+    pin -= 10; //Pin INTA
+
+    for(int i = 0; i < 10; i++) {
+        if(irqPins[pin][i] == NULL) {
+            irqPins[pin][i] = device;
+            break;
+        }
+    }
+
+    if(lapicSetted == 0) {
+        lapic_connect_gsi_to_vec(0, 0x90, 10, flags, 1);
+        lapic_connect_gsi_to_vec(0, 0x91, 11, flags, 1);
+        lapic_connect_gsi_to_vec(0, 0x92, 12, flags, 1);
+        lapic_connect_gsi_to_vec(0, 0x93, 13, flags, 1);
+        lapicSetted = 1;
+    }
 }

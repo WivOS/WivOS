@@ -36,6 +36,8 @@ SRCS += kernel/fs/initrd/tar.c
 
 SRCS += kernel/fs/devfs/devfs.c
 
+SRCS += kernel/fs/tty/tty.c
+
 SRCS += kernel/modules/modules.c
 
 SRCS += kernel/cpu/isr.asm
@@ -95,7 +97,7 @@ qemu: $(BIN_DIR)/image.hdd
 	powershell.exe -File run.ps1
 
 qemu2: $(BIN_DIR)/image.hdd
-	VREND_DEBUG="guestallow" /usr/local/bin/qemu-system-x86_64 --enable-kvm -hdd bin/RELEASE/image.hdd -m 4G -smp 4 -machine q35 -debugcon stdio -device virtio-gpu,virgl=on -display sdl,gl=on -device qemu-xhci -drive id=pendrive,file=test.img,format=raw,if=none -device usb-storage,drive=pendrive
+	VREND_DEBUG="guestallow" /usr/local/bin/qemu-system-x86_64 --enable-kvm -hdd bin/RELEASE/image.hdd -m 3G -smp 4 -machine q35 -debugcon stdio -device virtio-gpu,virgl=on -display sdl,gl=on -device qemu-xhci -device ac97,audiodev=snd0 -audiodev pa,id=snd0,server=$(PULSE_SERVER) -drive id=pendrive,file=test.img,format=raw,if=none -netdev user,id=mynet0 -device pcnet,netdev=mynet0 -object filter-dump,id=id0,netdev=mynet0,file=test.dump -device usb-storage,drive=pendrive
 
 image: $(BIN_DIR)/image.hdd
 
@@ -112,11 +114,11 @@ $(BIN_DIR)/image.hdd: $(BUILD_DIR)/kernel/proc/trampoline.bin $(BIN_DIR)/wivos.e
 	@mkdir -p $(@D)
 	@echo "Creating disk"
 	@rm -rf $@
-	@dd if=/dev/zero bs=1M count=0 seek=64 of=$@
+	@dd if=/dev/zero bs=1M count=0 seek=512 of=$@ #64
 	@echo "Creating echfs partition"
 	@parted -s $@ mklabel msdos
 	@parted -s $@ mkpart primary 1 100%
-	@echfs-utils -m -p0 $@ quick-format 32768
+	@echfs-utils -m -p0 $@ quick-format 262144 #32768
 	@echo "Importing files"
 	@echfs-utils -m -p0 $@ import $(BIN_DIR)/wivos.elf wivos.elf
 	@echfs-utils -m -p0 $@ import $(BIN_DIR)/initrd.tar initrd.tar

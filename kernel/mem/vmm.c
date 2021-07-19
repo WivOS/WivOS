@@ -124,7 +124,7 @@ void vmm_unmap_pages_huge(pt_t *pml4param, void *addr, size_t size) {
 pt_t *create_new_pml4() {
     pt_t *pml4 = (pt_t*)pmm_alloc(1);
     
-    vmm_map_pages_huge(pml4, (void *)0xFFFF800000000000, NULL, 512 * 4, 3);
+    vmm_map_pages_huge(pml4, (void *)0xFFFF800000000000, NULL, 4096 * 4, 3);
     vmm_map_pages_huge(pml4, (void *)0xFFFFFFFF80000000, NULL, 64, 3);
 
     return pml4;

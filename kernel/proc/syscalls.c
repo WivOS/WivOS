@@ -30,7 +30,7 @@ size_t open_syscall(thread_regs_t *regs) { // rdi: path, rsi: flags
     if(privilegeCheck(filepath, strlen(filepath) + 1))
         return -1;
 
-    process_t *currentProcess = get_active_process(cpuLocals[current_cpu].currentActiveThread);
+    process_t *currentProcess = get_active_process(cpuLocals[current_cpu].currentProcess);
 
     vfs_node_t *node = kopen(filepath, flags);
     if(!node) {
@@ -67,7 +67,7 @@ size_t read_syscall(thread_regs_t *regs) { // rdi: fd, rsi: buffer, rdx: count
     if(privilegeCheck(buffer, count))
         return -1;
 
-    process_t *currentProcess = get_active_process(cpuLocals[current_cpu].currentActiveThread);
+    process_t *currentProcess = get_active_process(cpuLocals[current_cpu].currentProcess);
 
     spinlock_lock(&currentProcess->filesLock);
 
@@ -92,7 +92,7 @@ size_t write_syscall(thread_regs_t *regs) { // rdi: fd, rsi: buffer, rdx: count
     if(privilegeCheck(buffer, count))
         return -1;
 
-    process_t *currentProcess = get_active_process(cpuLocals[current_cpu].currentActiveThread);
+    process_t *currentProcess = get_active_process(cpuLocals[current_cpu].currentProcess);
 
     spinlock_lock(&currentProcess->filesLock);
 
@@ -112,7 +112,7 @@ size_t write_syscall(thread_regs_t *regs) { // rdi: fd, rsi: buffer, rdx: count
 size_t close_syscall(thread_regs_t *regs) { // rdi: fd
     size_t fd = regs->rdi;
 
-    process_t *currentProcess = get_active_process(cpuLocals[current_cpu].currentActiveThread);
+    process_t *currentProcess = get_active_process(cpuLocals[current_cpu].currentProcess);
 
     spinlock_lock(&currentProcess->filesLock);
 
@@ -139,7 +139,7 @@ size_t ioctl_syscall(thread_regs_t *regs) { // rdi: fd, rsi: requestType, rdx: a
     if((argp != NULL) && privilegeCheck(argp, 1))
         return -1;
 
-    process_t *currentProcess = get_active_process(cpuLocals[current_cpu].currentActiveThread);
+    process_t *currentProcess = get_active_process(cpuLocals[current_cpu].currentProcess);
 
     spinlock_lock(&currentProcess->filesLock);
 
@@ -248,7 +248,7 @@ size_t lseek_syscall(thread_regs_t *regs) { // rdi: fd, rsi: offset, rdx: type
     size_t offset = (size_t)regs->rsi;
     size_t type = regs->rdx;
 
-    process_t *currentProcess = get_active_process(cpuLocals[current_cpu].currentActiveThread);
+    process_t *currentProcess = get_active_process(cpuLocals[current_cpu].currentProcess);
 
     spinlock_lock(&currentProcess->filesLock);
 
@@ -259,6 +259,26 @@ size_t lseek_syscall(thread_regs_t *regs) { // rdi: fd, rsi: offset, rdx: type
 
     vfs_node_t *currentFD = currentProcess->fileHandles[fd];
     size_t ret = vfs_lseek(currentFD, offset, type);
+
+    spinlock_unlock(&currentProcess->filesLock);
+
+    return ret;
+}
+
+size_t isatty_syscall(thread_regs_t *regs) { // rdi: fd
+    size_t fd = regs->rdi;
+
+    process_t *currentProcess = get_active_process(cpuLocals[current_cpu].currentProcess);
+
+    spinlock_lock(&currentProcess->filesLock);
+
+    if(fd >= MAX_FILE_HANDLES || !currentProcess->fileHandles[fd] || currentProcess->fileHandles[fd] == (vfs_node_t *)-1) {
+        spinlock_unlock(&currentProcess->filesLock);
+        return -1;
+    }
+
+    vfs_node_t *currentFD = currentProcess->fileHandles[fd];
+    size_t ret = vfs_isatty(currentFD);
 
     spinlock_unlock(&currentProcess->filesLock);
 

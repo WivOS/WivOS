@@ -1,6 +1,7 @@
 #pragma once
 
 #include <util/util.h>
+#include <fs/tty/tty.h>
 
 #define SEEK_CUR 1
 #define SEEK_END 2
@@ -13,6 +14,9 @@
 #define FS_PIPE        0x10
 #define FS_SYMLINK     0x20
 #define FS_MOUNTPOINT  0x40
+
+#define OPEN_WRITE     0x01
+#define OPEN_APPEND    0x02
 
 typedef int64_t off_t;
 
@@ -60,6 +64,10 @@ typedef struct vfs_functions {
     void (*close)(struct vfs_node *);
     struct vfs_node *(*finddir)(struct vfs_node *, char *name);
     size_t (*ioctl)(struct vfs_node *, size_t, void *);
+    size_t (*isatty)(struct vfs_node *);
+    size_t (*tcflow)(struct vfs_node *, int action);
+    size_t (*tcsetattr)(struct vfs_node *, int actions, struct termios *termios_p);
+    size_t (*tcgetattr)(struct vfs_node *, struct termios *termios_p);
 } vfs_functions_t;
 
 typedef struct vfs_node {
@@ -91,6 +99,10 @@ void vfs_open(vfs_node_t *node, uint32_t flags);
 void vfs_close(vfs_node_t *node);
 vfs_node_t *vfs_finddir(vfs_node_t *node, char *name);
 size_t vfs_ioctl(vfs_node_t *node, size_t requestType, void *argp);
+size_t vfs_isatty(vfs_node_t *node);
+size_t vfs_tcflow(vfs_node_t *node, int action);
+size_t vfs_tcsetattr(vfs_node_t *node, int optional_actions, struct termios *termios_p);
+size_t vfs_tcgetattr(vfs_node_t *node, struct termios *termios_p);
 
 // Utils
 char *vfs_remove_dot_chars(char *input);

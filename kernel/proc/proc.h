@@ -10,6 +10,8 @@
 typedef size_t pid_t;
 typedef size_t tid_t;
 
+typedef int event_t;
+
 typedef struct thread_regs {
 	uint64_t r15, r14, r13, r12, r11, r10, r9, r8,
 			 rdi, rsi, rbp, rdx, rcx, rbx, rax;
@@ -30,6 +32,10 @@ typedef struct thread {
     volatile size_t cpuNumber;
     volatile spinlock_t lock;
     volatile uint32_t guardPadding;
+    volatile event_t **eventPtr;
+    volatile int *outEventPtr;
+    volatile size_t eventTimeout;
+    volatile int eventNum;
     volatile uint8_t fxstate[512] __attribute__((aligned(16)));
 } __attribute__((packed)) thread_t;
 
@@ -51,3 +57,4 @@ pid_t proc_create(void *pml4);
 tid_t thread_create(pid_t pid, void *function);
 thread_t *get_active_thread(tid_t activeThread);
 process_t *get_active_process(tid_t activeThread);
+void yield();

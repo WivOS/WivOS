@@ -101,6 +101,8 @@ __attribute__((noinline)) static void idle(void) {
     _idle();
 }
 
+extern volatile size_t pit_count;
+
 volatile thread_t *get_next_task(size_t currentActiveThread) {
     if(currentActiveThread != -1) {
         currentActiveThread++;
@@ -122,6 +124,29 @@ volatile thread_t *get_next_task(size_t currentActiveThread) {
         }
         if(!spinlock_try_lock(&thread->lock)) {
             goto next;
+        }
+        if(thread->eventPtr) {
+            int wake = 0;
+            for(int i = 0; i < (thread->eventNum); i++) {
+                if(locked_read(event_t, thread->eventPtr[i])) {
+                    wake = 1;
+                    locked_dec(thread->eventPtr[i]);
+                    thread->outEventPtr[i] = 1;
+                }
+
+                if(thread->eventTimeout <= pit_count && (thread->eventTimeout != 0) && !wake) {
+                    thread->eventPtr = 0;
+                    thread->eventTimeout = 0;
+                    wake = 1;
+                }
+
+                if(wake) {
+                    thread->eventPtr = 0;
+                } else {
+                    spinlock_unlock(&thread->lock);
+                    goto next;
+                }
+            }
         }
         return thread;
         next:
@@ -198,6 +223,13 @@ skip_invalid_thread_context_save:
         task_return_context((thread_regs_t *)&next_task->context_regs, 0);
     }
     //TODO, change context
+}
+
+extern volatile void force_resched();
+
+void yield() {
+    spinlock_lock(&schedulerLock);
+    force_resched();
 }
 
 pid_t proc_create(void *pml4) {

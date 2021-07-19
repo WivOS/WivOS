@@ -258,6 +258,8 @@ syscall_table:
     dq fork_syscall ; 0x7
     extern lseek_syscall
     dq lseek_syscall ; 0x8
+    extern isatty_syscall
+    dq isatty_syscall ; 0x9
     dq invalid_syscall
 .end:
 
@@ -403,6 +405,47 @@ task_return_context:
     sti
 
     iretq
+
+global force_resched
+force_resched:
+    cli
+
+    mov rax, rsp
+
+    push 0x10
+    push rax
+    push 0x202
+    push 0x08
+    mov rax, .done
+    push rax
+    push rax
+    push rbx
+    push rcx
+    push rdx
+    push rbp
+    push rsi
+    push rdi
+    push r8
+    push r9
+    push r10
+    push r11
+    push r12
+    push r13
+    push r14
+    push r15
+
+    extern schedulerLock
+    lock inc qword [schedulerLock]
+
+    mov rdi, rsp
+.retry:
+    xor rbp, rbp
+    extern schedule
+    call schedule
+    jmp .retry
+
+.done:
+    ret
 
 ;Todo: Remove this when not needed.
 align 16

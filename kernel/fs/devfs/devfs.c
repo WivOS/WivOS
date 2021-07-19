@@ -1,6 +1,8 @@
 #include "devfs.h"
 #include <fs/vfs.h>
 
+#include <fs/tty/tty.h>
+
 gentree_t *devfs_tree;
 
 vfs_node_t *devfs_finddir(vfs_node_t *parent, char *name) {
@@ -41,4 +43,6 @@ void initDevFS() {
     devfsNode->functions.finddir = devfs_finddir;
     devfsNode->flags |= FS_DIRECTORY;
     vfs_mount("/dev/", devfsNode);
+
+    initTTY();
 }

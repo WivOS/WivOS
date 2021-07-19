@@ -4,5 +4,10 @@ modules/*/bin/
 kernel/symbols.s
 /**/*.wko
 *.img
+clib
+sysroot
+test/
+toolchain/
+/**/*.wav
 
 initrd/tests/*
