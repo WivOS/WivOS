@@ -220,6 +220,7 @@ static void irq_handler(irq_regs_t *regs) {
                 vqs[r]->lastUsed = (vqs[r]->lastUsed + 1) & vqs[r]->queueMask;
             }
         }
+        spinlock_unlock(&ioEvent);
     }
 
     __asm__ __volatile__ ("" ::: "memory");
@@ -229,8 +230,6 @@ static void irq_handler(irq_regs_t *regs) {
         __atomic_thread_fence(__ATOMIC_SEQ_CST);
         gpuConfig->events_clear = gpuConfig->events_read;
     }
-
-    spinlock_unlock(&ioEvent);
 }
 
 static size_t gpu_write(vfs_node_t *file, char *buffer, size_t size) {
@@ -855,9 +854,7 @@ static int _init() {
         init_queue(0);
         init_queue(1);
 
-        irq_functions[0x30] = (idt_fn_t)irq_handler;
-
-        lapic_connect_gsi_to_vec(0, 0x50, virtioDevice->gsi, virtioDevice->gsiFlags, 1);
+        connectDeviceToPin(virtioDevice->gsi, irq_handler, virtioDevice->gsiFlags);
 
         *virtioRegs->queueSelect = 0x00;
         notifyQueue0 = virtioBarNotify->base + VIRT_PHYS_BASE + offset2 + *virtioRegs->queueNotify * notifyMultiplier;
