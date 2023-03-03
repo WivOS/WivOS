@@ -10,3 +10,5 @@ Then you will need to recompile qemu to use virglrenderer.
 If anyone wants to join the discord community server here it is:
 
 [Discord](https://discord.gg/r7j23A2tHG)
+
+Prueba
