@@ -1,0 +1,8 @@
+bin/
+build/
+toolchain/binutils-gdb/
+toolchain/gcc/
+toolchain/build-*/
+sysroot/
+toolchain/mlibc/
+initrd/

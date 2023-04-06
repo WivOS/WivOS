@@ -1,0 +1,16 @@
+CFLAGS += -Iexternal/lai/include
+SRCS += external/lai/core/error.c
+SRCS += external/lai/core/eval.c
+SRCS += external/lai/core/exec.c
+SRCS += external/lai/core/exec-operand.c
+SRCS += external/lai/core/libc.c
+SRCS += external/lai/core/ns.c
+SRCS += external/lai/core/object.c
+SRCS += external/lai/core/opregion.c
+SRCS += external/lai/core/os_methods.c
+SRCS += external/lai/core/variable.c
+SRCS += external/lai/core/vsnprintf.c
+SRCS += external/lai/helpers/pci.c
+SRCS += external/lai/helpers/pm.c
+SRCS += external/lai/helpers/resource.c
+SRCS += external/lai/helpers/sci.c

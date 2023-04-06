@@ -1,0 +1,14 @@
+[binaries]
+c = 'x86_64-wivos-gcc'
+cpp = 'x86_64-wivos-g++'
+ar = 'x86_64-wivos-ar'
+strip = 'x86_64-wivos-strip'
+
+[properties]
+root = '/home/jesus/proyectos/RWivOS/toolchain/sysroot/'
+
+[host_machine]
+system = 'wivos'
+cpu_family = 'x86_64'
+cpu = 'x86_64'
+endian = 'little'

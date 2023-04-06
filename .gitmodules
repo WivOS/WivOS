@@ -1,0 +1,6 @@
+[submodule "external/lai"]
+	path = external/lai
+	url = git@github.com:managarm/lai.git
+[submodule "toolchain/mlibc"]
+	path = toolchain/mlibc
+	url = git@github.com:managarm/mlibc.git

@@ -1,0 +1,57 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Launch with GDB",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceRoot}/bin/RELEASE/wivos.elf",
+            "cwd": "${workspaceFolder}",
+            "args": [],
+            "targetArchitecture": "x64",
+            "environment": [],
+            "MIMode": "gdb",
+            "miDebuggerPath": "/usr/bin/gdb",
+            "miDebuggerArgs": "",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ],
+            "customLaunchSetupCommands": [
+                {
+                    "text": "target remote localhost:1234",
+                    "description": "Connect to QEMU remote debugger"
+                },
+                {
+                    "text": "symbol-file ${workspaceRoot}/bin/RELEASE/wivos.elf",
+                    "description": "Load binary."
+                }
+            ],
+            "hardwareBreakpoints": {
+                "require": true,
+                "limit": 6
+            },
+            //"avoidWindowsConsoleRedirection": true,
+            "preLaunchTask": "Launch QEMU Debug"
+        },
+        {
+            "name": "Launch with LLDB",
+            "type": "gdb",
+            "request": "attach",
+            "executable": "${workspaceRoot}/bin/RELEASE/wivos.elf",
+            "target": "localhost:1234",
+            "remote": true,
+            "cwd": "${workspaceFolder}",
+            "gdbpath": "/usr/bin/gdb",
+            "autorun": [
+                "hbreak kentry",
+                "continue",
+                "clear kentry"
+            ],
+            "preLaunchTask": "Launch QEMU Debug"
+        }
+    ]
+}
