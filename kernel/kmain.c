@@ -112,6 +112,24 @@ void kentry_threaded() {
     module_load("/virtiogpu.wko");
     module_load("/packetfs.wko");
     module_load("/shm.wko");
+    module_load("/usb.wko");
+    module_load("/xhci.wko");
+
+    //Install usb drivers
+    vfs_node_t *usbDriverDir = kopen("/usb/", 0);
+    if(usbDriverDir != NULL) {
+        vsf_dirent_t dirent = {0};
+        while(!vfs_readdir(usbDriverDir, &dirent)) {
+            if(!strncmp(dirent.d_name + strlen(dirent.d_name) - 4, ".wko", 4)) {
+                //USB Drivers: Load
+                char *usbPath = kmalloc(sizeof(dirent.d_name) + 5);
+                sprintf(usbPath, "/usb/%s", dirent.d_name);
+                module_load(usbPath);
+
+                kfree(usbPath);
+            }
+        }
+    }
 
     /*vfs_node_t *testfat = kopen("/test/long_name_test.txt", 0);
     vfs_lseek(testfat, 0, SEEK_SET);

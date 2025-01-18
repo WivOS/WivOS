@@ -85,7 +85,7 @@ void virtio_setup_queue(pci_device_t *virtioDevice, size_t index) {
     device->virtual_queues[index] = virtqueue;
 }
 
-bool virtio_irq_handler(irq_regs_t *regs) {
+bool virtio_irq_handler(irq_regs_t *regs, void *_data) {
     foreach(node, virtioDevices) {
         virtio_device_t *device = (virtio_device_t *)node->value;
         if(device->irq == regs->int_no) {
@@ -114,6 +114,11 @@ bool virtio_irq_handler(irq_regs_t *regs) {
                                 spinlock_unlock(&queue->descriptorsLock[j]); //Unlock the descriptor to inform
 
                                 if(next < 0) break;
+
+                                queue->descriptors[j].next = queue->freeList;
+                                queue->freeList = j;
+                                queue->freeCount++;
+
                                 j = next;
                                 continue;
                             }
@@ -328,7 +333,7 @@ void virtio_init_device(virtio_device_t *device, uint64_t features, virtio_event
     device->event_handler = eventHandler;
 
     device->irq = virtioDevice->gsi + 0x90;
-    idt_add_pci_handler(virtioDevice->gsi, virtio_irq_handler, virtioDevice->gsi_flags);
+    idt_add_pci_handler(virtioDevice->gsi, virtio_irq_handler, virtioDevice->gsi_flags, NULL);
 
     printf("Virtio device inited\n");
 }

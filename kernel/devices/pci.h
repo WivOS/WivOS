@@ -64,6 +64,7 @@ uint32_t pci_device_read_config(pci_device_t *device, uint16_t offset,
                          uint8_t readSize);
 
 void pci_enable_busmastering(pci_device_t *device);
+void pci_set_interrupts(pci_device_t *device, bool enable);
 void pci_enable_mmio(pci_device_t *device);
 
 pci_device_t *pci_get_device(uint8_t class, uint8_t subclass, uint8_t prog_if, size_t index);

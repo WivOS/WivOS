@@ -163,7 +163,7 @@ uint32_t ioapic_read(size_t ioapic, uint32_t reg) {
 }
 
 static uint32_t ioapic_get_max_redirections(size_t ioapic) {
-    return (ioapic_read(ioapic, 0x1) >> 16) & 0xFF;
+    return ((ioapic_read(ioapic, 0x1) >> 16) & 0xFF) + 1; //Zero means 1
 }
 
 size_t ioapic_get_id_from_gsi(uint32_t gsi) {

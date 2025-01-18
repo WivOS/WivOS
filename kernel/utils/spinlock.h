@@ -85,7 +85,7 @@ __attribute__((noinline)) __attribute__((unused)) static void deadlock_detect(co
                        volatile spinlock_t *lock,
                        size_t iter) {
     while (locked_write(int, &deadlock_detect_lock, 1));
-    qemu_debug_puts_urgent("\n---\npossible deadlock at: spinlock_acquire(");
+    qemu_debug_puts_urgent("\n---\npossible deadlock at: spinlock_lock(");
     qemu_debug_puts_urgent(lockname);
     qemu_debug_puts_urgent(");");
     qemu_debug_puts_urgent("\nfile: ");

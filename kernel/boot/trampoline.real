@@ -62,6 +62,7 @@ ltr ax
 mov byte [0x510], 1
 
 mov rbx, qword [0x520]
+xor rbp, rbp
 call rbx
 
 jmp $

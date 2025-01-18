@@ -12,7 +12,6 @@
 
 typedef size_t kpid_t;
 typedef size_t ktid_t;
-typedef void list_t;
 
 #endif
 

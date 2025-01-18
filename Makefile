@@ -1,6 +1,6 @@
 SHELL = /bin/bash
 
-CFLAGS := -g -mno-red-zone -Wall -ffreestanding -Werror -Wno-unused-variable -Wno-strict-aliasing -Wno-unused-function -fno-pic -Ikernel -Iexternal/lai/include -O2 -mavx -Wno-address-of-packed-member
+CFLAGS := -g -mno-red-zone -Wall -ffreestanding -Werror -Wno-unused-variable -Wno-strict-aliasing -Wno-unused-function -fno-pic -Ikernel -Iexternal/lai/include -O2 -mavx -Wno-address-of-packed-member -fno-omit-frame-pointer -fsanitize=undefined
 LDFLAGS := -nostdlib -no-pie
 
 INITRD_DIR := ./initrd
@@ -54,6 +54,7 @@ SRCS += kernel/utils/system.c
 SRCS += kernel/utils/string.c
 SRCS += kernel/utils/kmalloc.c
 SRCS += kernel/utils/lists.c
+SRCS += kernel/utils/ubsan.c
 
 .PHONY: default qemu image clean clean-all toolchain
 
@@ -72,7 +73,7 @@ $(BIN_DIR)/wivos.elf: $(BUILD_DIR)/kernel/boot/trampoline.bin $(OBJS) $(BUILD_DI
 $(BUILD_DIR)/kernel/symbols.o: $(BUILD_DIR)/kernel/boot/trampoline.bin $(OBJS) generate_symbols.py
 	@mkdir -p $(@D)
 	clang -fuse-ld=lld $(LDFLAGS) -o $(BUILD_DIR)/wivost.elf $(OBJS)
-	nm $(BUILD_DIR)/wivost.elf -g | python2 generate_symbols.py > kernel/symbols.s
+	nm $(BUILD_DIR)/wivost.elf -g -P | python2 generate_symbols.py > kernel/symbols.s
 	nasm kernel/symbols.s -f elf64 -o $@
 
 $(BUILD_DIR)/%.c.o: %.c
@@ -90,7 +91,10 @@ $(BUILD_DIR)/%.bin: %.real
 build-modules:
 	@make -C modules install
 
-build-apps:
+build-libs:
+	@make -C libs install
+
+build-apps: build-libs
 	@make -C apps install
 
 image: $(BIN_DIR)/image.hdd
@@ -104,7 +108,7 @@ $(BIN_DIR)/image.hdd: $(BIN_DIR)/wivos.elf build-modules build-apps toolchain/sy
 	@mkdir -p $(@D)
 	@echo "Creating disk"
 	@rm -rf $@
-	@dd if=/dev/zero bs=1M count=0 seek=256 of=$@ #64
+	@dd if=/dev/zero bs=1M count=0 seek=512 of=$@ #64
 	@echo "Creating echfs partition"
 	@parted -s $@ mklabel gpt
 	@parted -s $@ mkpart primary 2048s 100%
@@ -127,10 +131,10 @@ $(BIN_DIR)/image.hdd: $(BIN_DIR)/wivos.elf build-modules build-apps toolchain/sy
 	@rm -rf test_image loopback_dev
 
 qemu: $(BIN_DIR)/image.hdd
-	source ~/.bashrc && qemu-system-x86_64 -enable-kvm -cpu host -m 1024M -M q35 -bios boot/OVMF.fd -net none -smp 4 -drive file=$(BIN_DIR)/image.hdd,if=none,id=nvm -device nvme,serial=deadbeef,drive=nvm -debugcon stdio -device virtio-vga-gl,disable-legacy=on,xres=1280,yres=1024 -display sdl,gl=on --no-reboot --no-shutdown
+	source ~/.bashrc && qemu-system-x86_64 -enable-kvm -cpu host -m 1024M -M q35 -bios boot/OVMF.fd -net none -smp 4 -drive file=$(BIN_DIR)/image.hdd,if=none,id=nvm -device nvme,serial=deadbeef,drive=nvm -debugcon stdio -device virtio-vga-gl,disable-legacy=on,xres=1280,yres=1024 -display sdl,gl=on -device qemu-xhci -device usb-kbd -device usb-tablet --no-reboot --no-shutdown
 
 qemu-debug:
-	qemu-system-x86_64 -enable-kvm -cpu host -m 1024M -M q35 -bios boot/OVMF.fd -net none -smp 4 -drive file=$(BIN_DIR)/image.hdd,if=none,id=nvm -device nvme,serial=deadbeef,drive=nvm -debugcon stdio -device virtio-vga-gl,xres=1280,yres=1024 -display sdl,gl=on --trace "virtio_gpu_cmd_*" --no-reboot --no-shutdown -S -s
+	qemu-system-x86_64 -enable-kvm -cpu host -m 1024M -M q35 -bios boot/OVMF.fd -net none -smp 4 -drive file=$(BIN_DIR)/image.hdd,if=none,id=nvm -device nvme,serial=deadbeef,drive=nvm -debugcon stdio -device virtio-vga-gl,xres=1280,yres=1024 -display sdl,gl=on --trace "virtio_gpu_cmd_*" -device qemu-xhci -device usb-kbd --trace "usb_desc_*" --no-reboot --no-shutdown -S -s
 
 clean:
 	rm -fr build

@@ -14,7 +14,8 @@ irq_fn_t IRQFunctions[0x40];
 
 #define MAX_GSI_PINS 32
 
-irq_fn_t pciIrqPins[MAX_GSI_PINS][10];
+irq_pci_fn_t pciIrqPins[MAX_GSI_PINS][10];
+void *pciIrqPinsData[MAX_GSI_PINS][10];
 static bool idt_irq_pins_connected[MAX_GSI_PINS];
 
 static void idt_populate(int idx, uint64_t offset, uint8_t segment, uint8_t ist, uint8_t typeAttr) {
@@ -33,7 +34,7 @@ void dispatch_interrupt(irq_regs_t *regs) {
 		bool found = false;
 		for(int i = 0; i < 10; i++) {
 			if(pciIrqPins[regs->int_no - 0x90][i] != NULL) {
-				if(pciIrqPins[regs->int_no - 0x90][i](regs)) {
+				if(pciIrqPins[regs->int_no - 0x90][i](regs, pciIrqPinsData[regs->int_no - 0x90][i])) {
 					lapic_write(0xB0, 0);
 					found = true;
 					break;
@@ -100,12 +101,13 @@ void idt_init() {
     __asm__ volatile("lidt %0; sti;" :: "m"(idtr));
 }
 
-void idt_add_pci_handler(uint8_t gsi, irq_fn_t func, uint16_t flags) {
+void idt_add_pci_handler(uint8_t gsi, irq_pci_fn_t func, uint16_t flags, void *data) {
 	if(gsi >= MAX_GSI_PINS) return;
 
 	for(int i = 0; i < 10; i++) {
 		if(pciIrqPins[gsi][i] == NULL) {
 			pciIrqPins[gsi][i] = func;
+			pciIrqPinsData[gsi][i] = data;
 			break;
 		}
 	}

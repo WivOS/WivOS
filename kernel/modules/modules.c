@@ -10,6 +10,7 @@
 
 typedef struct {
     uint64_t addr;
+    uint64_t size;
     char name[];
 } kernel_symbol_t;
 
@@ -79,7 +80,7 @@ typedef struct {
     uint64_t align;
 } __attribute__((packed)) elf64_program_header_t;
 
-bool module_load(char *path) {
+bool module_load(char *path) __attribute__((no_sanitize("alignment"))) {
     vfs_node_t *elfNode = kopen(path, 0);
     if(!elfNode) {
         printf("asa1\n");
@@ -378,7 +379,8 @@ void modules_init() {
 
     while((uint64_t)symbol < (uint64_t)&kernel_symbols_end) {
         hashmap_set(KernelSymbolsHashmap, symbol->name, (void *)symbol->addr);
-        symbol = (kernel_symbol_t *)((size_t)symbol + sizeof(kernel_symbol_t) + strlen(symbol->name) + 1);
+        uintptr_t new_address = (uintptr_t)symbol + sizeof(kernel_symbol_t) + strlen(symbol->name) + 1;
+        symbol = (kernel_symbol_t *)ROUND_UP(new_address, sizeof(uintptr_t));
     }
 
     hashmap_set(KernelSymbolsHashmap, "kernel_symbols_start", kernel_symbols_start);

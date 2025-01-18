@@ -57,7 +57,7 @@ static size_t send_command_response(const void *cmd, size_t cmdLength, void **_r
 
     //printf("Sending\n");
     virtio_submit_descriptor(VirtioGpuDevice, 0, i, next);
-    virtio_free_descriptor(VirtioGpuDevice, 1, next);
+    virtio_free_descriptor(VirtioGpuDevice, 0, next);
 
     return 0;
 }

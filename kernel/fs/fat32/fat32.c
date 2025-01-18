@@ -54,6 +54,8 @@ typedef struct {
     fat32fs_custom_data_t *customData;
 
     fat32_entry_t entry;
+
+    uint32_t cluster;
 } fat32fs_device_t;
 
 #define SECTOR_TO_OFFSET(x) ((x) << 9)
@@ -288,13 +290,107 @@ size_t fat32_lseek(vfs_node_t *node, size_t offset, size_t type) {
     return node->offset;
 }
 
+size_t fat32_readdir(vfs_node_t *node_dev, vsf_dirent_t *dirent) {
+    fat32fs_device_t *device = (fat32fs_device_t *)node_dev->data;
+    fat32fs_custom_data_t *customData = (fat32fs_custom_data_t *)device->customData;
+
+    spinlock_lock(&customData->lock);
+
+    size_t fat_length = customData->sectors_per_fat * 512;
+
+    uint32_t *fat = kmalloc(fat_length);
+    read_device_offset(customData->deviceNode, SECTOR_TO_OFFSET(customData->reserved_sectors), fat, fat_length);
+
+    char entry_name[512];
+    bool ready_long_name = false;
+
+    size_t counter = 0x40;
+
+    fat32_entry_t entry;
+    size_t i = dirent->d_ino & 0xFFFFFFFF;
+    size_t cluster = dirent->d_ino >> 32;
+    if(cluster == 0) cluster = device->cluster;
+    for(; fat32_read_fat_entry(customData, cluster, i, &entry); i++) {
+        if(i == customData->sectors_per_cluster * 16) {
+            cluster = fat32_get_next_cluster(cluster, fat, fat_length);
+            if(cluster == 0) {
+                //Found finish file
+                kfree(fat);
+
+                spinlock_unlock(&customData->lock);
+                return -1;
+            }
+            i = -1;
+            continue;
+        }
+
+        if (entry.directory.name[0] == 0xE5) continue;
+
+        if(entry.directory.attribute == 0x0F) {
+            //Handle long file names
+
+            uint8_t index = (entry.long_file_name.order & 0x1F) - 1;
+            if(entry.long_file_name.order & 0x40) {
+                entry_name[index * 14] = 0;
+                ready_long_name = true;
+            }
+
+            for(int j = 0; j < 5; j++) {
+                entry_name[index * 13 + j] = entry.long_file_name.name1[j*2];
+            }
+            for(int j = 0; j < 6; j++) {
+                entry_name[index * 13 + 5 + j] = entry.long_file_name.name2[j*2];
+            }
+            for(int j = 0; j < 2; j++) {
+                entry_name[index * 13 + 11 + j] = entry.long_file_name.name3[j*2];
+            }
+        } else {
+            memset(dirent->d_name, 0, 1024);
+            if(ready_long_name) {
+                strcpy(dirent->d_name, entry_name);
+            } else {
+                //get the actual filename and the extension
+                size_t lastCharacter = 0;
+                for(lastCharacter = 7; lastCharacter >= 0; lastCharacter--) {
+                    uint8_t character = entry.directory.name[lastCharacter];
+                    if(character != 0 && character != 0xFF && character != ' ') break;
+                }
+                memcpy(dirent->d_name, entry.directory.name, lastCharacter + 1);
+                bool hasExtension = true;
+                for(size_t j = 0; j < 3; j++) {
+                    uint8_t character = entry.directory.name[j+8];
+                    if(character == 0 || character == 0xFF || character == ' ') hasExtension = false;
+                }
+                if(hasExtension) {
+                    dirent->d_name[lastCharacter + 1] = '.';
+                    memcpy(dirent->d_name + lastCharacter + 2, entry.directory.name + 8, 3);
+                }
+            }
+            dirent->d_ino = ((uint64_t)cluster << 32) | ((i + 1) & 0xFFFFFFFF);
+            dirent->d_reclen = sizeof(vsf_dirent_t);
+            dirent->d_type = (entry.directory.attribute & 0x10) ? DT_DIR : DT_REG;
+
+            kfree(fat);
+
+            spinlock_unlock(&customData->lock);
+            return 0;
+        }
+    }
+
+    //Found finish file
+    kfree(fat);
+
+    spinlock_unlock(&customData->lock);
+    return -1;
+}
+
 vfs_node_t *fat32_finddir(vfs_node_t *node_dev, char *name, char **last_path) {
     fat32fs_custom_data_t *customData = (fat32fs_custom_data_t *)node_dev->data;
 
     spinlock_lock(&customData->lock);
 
     char path[1024];
-    if(strlen(*last_path)) {
+    if(*last_path && strlen(*last_path)) {
         sprintf(path, "%s/%s", name, *last_path);
     } else {
         strcpy(path, name);
@@ -385,6 +481,26 @@ vfs_node_t *fat32_finddir(vfs_node_t *node_dev, char *name, char **last_path) {
                 node->data = (void *)device;
                 node->functions.read = fat32_read;
                 node->functions.lseek = fat32_lseek;
+
+                kfree(fat);
+
+                *last_path = NULL; //Null it out, to indicate we handled the directory finding
+
+                spinlock_unlock(&customData->lock);
+                return node;
+            } else if(entry.directory.attribute & 0x10 && pathIsAFile && match) {
+                //Here we are areading a directory
+
+                vfs_node_t *node = (vfs_node_t *)kmalloc(sizeof(vfs_node_t));
+                fat32fs_device_t *device = (fat32fs_device_t *)kmalloc(sizeof(fat32fs_device_t));
+                device->customData = customData;
+                device->entry = entry;
+                device->cluster = newCluster;
+
+                memcpy(node->name, path, 1024);
+                node->flags |= VFS_DIRECTORY;
+                node->data = (void *)device;
+                node->functions.readdir = fat32_readdir;
 
                 kfree(fat);
 

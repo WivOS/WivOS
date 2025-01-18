@@ -29,8 +29,9 @@ typedef struct {
 } __attribute__((packed)) idtr_t;
 
 typedef bool (*irq_fn_t)(irq_regs_t *);
+typedef bool (*irq_pci_fn_t)(irq_regs_t *, void *);
 extern irq_fn_t IRQFunctions[0x40];
 
 void idt_init();
 
-void idt_add_pci_handler(uint8_t gsi, irq_fn_t func, uint16_t flags);
+void idt_add_pci_handler(uint8_t gsi, irq_pci_fn_t func, uint16_t flags, void *data);

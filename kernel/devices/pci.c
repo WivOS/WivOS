@@ -250,6 +250,14 @@ void pci_enable_busmastering(pci_device_t *device) {
     }
 }
 
+void pci_set_interrupts(pci_device_t *device, bool enable) {
+    uint32_t cfg = pci_device_read_config(device, 0x4, sizeof(uint32_t));
+    if(enable)
+        pci_device_write_config(device, 0x4, cfg & ~(1 << 10), sizeof(uint32_t));
+    else
+        pci_device_write_config(device, 0x4, cfg | (1 << 10), sizeof(uint32_t));
+}
+
 void pci_enable_mmio(pci_device_t *device) {
     pci_device_write_config(device, 0x4, pci_device_read_config(device, 0x4, sizeof(uint32_t)) | (1 << 1), sizeof(uint32_t));
 }

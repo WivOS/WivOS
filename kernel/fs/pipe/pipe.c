@@ -13,6 +13,7 @@ typedef struct {
     spinlock_t lock;
 
     size_t flags;
+    bool readFirstData;
 } pipe_data_t;
 
 size_t pipe_read(struct vfs_node *node, char *buffer, size_t size) {
@@ -33,6 +34,11 @@ size_t pipe_read(struct vfs_node *node, char *buffer, size_t size) {
                 return -1;
             }
             spinlock_lock(&data->lock);
+
+            if(data->readFirstData) {
+                size = data->size;
+                break;
+            }
         }
     }
 
@@ -107,6 +113,7 @@ bool pipe_create(vfs_node_t **pipeNodes) {
     newPipe->reference_count = 2;
     newPipe->lock = INIT_SPINLOCK();
     newPipe->size = 0;
+    newPipe->readFirstData = false;
     event_reset(&newPipe->event);
 
     vfs_node_t *readNode = (vfs_node_t *)kmalloc(sizeof(vfs_node_t));
@@ -129,4 +136,8 @@ bool pipe_create(vfs_node_t **pipeNodes) {
     pipeNodes[1] = writeNode;
 
     return true;
+}
+
+void pipe_set_read_at_first_data(vfs_node_t *pipe, bool set) {
+    ((pipe_data_t *)pipe->data)->readFirstData = set;
 }

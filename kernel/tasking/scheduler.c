@@ -4,6 +4,7 @@
 
 #include <cpu/cpu.h>
 #include <cpu/inlines.h>
+#include <devices/timer.h>
 
 #include "event.h"
 
@@ -55,6 +56,7 @@ static volatile thread_t *scheduler_get_next_task(kpid_t currentTask) {
             if(thread == NULL) break; //There are no more tasks
         }
         if((void *)thread == (void *)-1) goto skip; //This task is deleted;
+        if(thread->yield_target > TimerCounter) goto next;
         if(!spinlock_try_lock(&thread->lock)) goto next;
         if(thread->event_pointer) {
             if(!thread->event_abort) {
@@ -219,6 +221,16 @@ ktid_t scheduler_add_task(kpid_t pid, ktid_t tid) {
 extern void force_reschedule();
 void yield() {
     spinlock_lock(&SchedulerLock);
+    force_reschedule();
+}
+
+void thread_sleep(size_t ms) {
+    spinlock_lock(&SchedulerLock);
+    uint32_t yieldTarget = TimerCounter + ( (ms * TIMER_FREQ) / 1000);
+
+    volatile thread_t *currentThread = ActiveTasks[CPULocals[CurrentCPU].currentTaskID];
+    currentThread->yield_target = yieldTarget;
+
     force_reschedule();
 }
 

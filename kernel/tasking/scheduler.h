@@ -28,6 +28,7 @@ kpid_t scheduler_get_current_pid();
 bool syscall_privilege_check(void *base, size_t size);
 
 void yield();
+void thread_sleep(size_t ms);
 
 typedef size_t (*syscall_fn_t)(irq_regs_t *);
 bool syscall_install(syscall_fn_t func, size_t index);

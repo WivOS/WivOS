@@ -1,4 +1,4 @@
-CFLAGS := -g -Wall -Wno-unused-variable -Wno-unused-function -no-pie -z noexecstack -I$(MAIN_PATH)/kernel/ -I$(MAIN_PATH)/external/lai/include/ -L$(MAIN_PATH)/initrd/lib/
+CFLAGS := -g -fpic -Wall -Wno-unused-variable -Wno-unused-function -z noexecstack
 
 ifeq ($(DEBUG), 1)
 	BIN_DIR := bin/DEBUG
@@ -16,14 +16,14 @@ GCC := x86_64-wivos-gcc
 
 $(BUILD_DIR)/%.c.o: %.c
 	@mkdir -p $(@D)
-	$(GCC) $(CFLAGS) $(INCLUDES) -c $< -o $@
+	$(GCC) $(CFLAGS) -c $< -o $@
 
 build: $(OBJS)
 	@mkdir -p $(BIN_DIR)
-	$(GCC) -o $(BIN_DIR)/$(APP_NAME) $(OBJS) $(CFLAGS) $(LINKS)
+	$(GCC) -shared -o $(BIN_DIR)/lib$(LIB_NAME).so $(OBJS) $(CFLAGS)
 
 install: build
-	cp $(BIN_DIR)/$(APP_NAME) $(MAIN_PATH)/initrd/tests/
+	cp $(BIN_DIR)/lib$(LIB_NAME).so $(MAIN_PATH)/initrd/lib/
 
 clean:
 	rm -fr bin build

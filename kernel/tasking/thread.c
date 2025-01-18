@@ -36,6 +36,7 @@ done: (void)tid;
     newThread->taskID = -1;
     newThread->fs_base = 0;
     newThread->event_abort = 0;
+    newThread->yield_target = 0;
     newThread->fxstate = kmalloc(CpuSimdRegionSize);
     if(pid == 0x0) {
         newThread->saved_regs.cs = 0x08;

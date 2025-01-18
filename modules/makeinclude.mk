@@ -11,7 +11,7 @@ build: $(SRCS)
 	clang -m64 -MMD -c -o $(BIN_DIR)/$(MODULE_NAME).wko $(SRCS) $(CFLAGS)
 
 install: build
-	cp $(BIN_DIR)/$(MODULE_NAME).wko $(MAIN_PATH)/initrd/
+	cp $(BIN_DIR)/$(MODULE_NAME).wko $(MAIN_PATH)/initrd/$(INSTALL_PATH)/
 
 clean:
 	rm -fr bin

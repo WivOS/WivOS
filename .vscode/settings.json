@@ -83,7 +83,13 @@
         "unistd.h": "c",
         "hash_map": "c",
         "hash_set": "c",
-        "atomic": "c"
+        "atomic": "c",
+        "compositor.h": "c",
+        "thread": "c",
+        "coroutine": "c",
+        "wivc.h": "c",
+        "usb.h": "c",
+        "typeindex": "c"
     },
     "debug.onTaskErrors": "debugAnyway",
     "search.exclude": {

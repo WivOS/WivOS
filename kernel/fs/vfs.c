@@ -42,6 +42,11 @@ vfs_node_t *vfs_finddir(vfs_node_t *node, char *name, char **path) {
     return node->functions.finddir(node, name, path);
 }
 
+size_t vfs_readdir(vfs_node_t *node, vsf_dirent_t *dirent) {
+    if(!node || !(node->flags & VFS_DIRECTORY) || !node->functions.readdir) return -1;
+    return node->functions.readdir(node, dirent);
+}
+
 vfs_node_t *vfs_create(vfs_node_t *node, char *name, uint32_t flags) {
     if(!node || !(node->flags & VFS_DIRECTORY) || !node->functions.create) return NULL;
     return node->functions.create(node, name, flags);
@@ -96,8 +101,8 @@ static vfs_node_t *vfs_get_mountpoint_recursive(char **path, gentree_node_t *sub
 }
 
 vfs_node_t *vfs_get_mountpoint(char **path) {
-    if(strlen(*path) > 1 && (*path)[strlen(*path) - 1] == '/')
-        *(path)[strlen(*path) - 1] = '\0';
+    if(*path && strlen(*path) > 1 && (*path)[strlen(*path) - 1] == '/')
+        (*path)[strlen(*path) - 1] = '\0';
     if(!*path || *(path)[0] != '/') return NULL;
 
     if(strlen(*path) == 1) {

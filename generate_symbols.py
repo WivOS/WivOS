@@ -7,9 +7,17 @@
 import fileinput
 
 def formatLine(line):
-    if len(line.strip().split(" ")) != 3:
+    stripLength = len(line.strip().split(" "))
+    if stripLength < 3 or stripLength > 4:
         return
-    _, _, name = line.strip().split(" ")
+
+    #  _, _, name = line.strip().split(" ")
+    temp_list = line.strip().split(" ")
+    size = 0
+    if len(temp_list) >= 4:
+        name, _, _, size = temp_list
+    else:
+        name, _, _ = temp_list
     if name == "abs":
         # abs is a keyword, so we'll just pretend we don't have that
         return
@@ -19,8 +27,10 @@ def formatLine(line):
     zeroes = ", 0" # * (1 + 4 - ((len(name) + 1) % 4))
     print """
     extern %s
+    align 8
     dq %s
-    db '%s'%s""" % (name, name, name, zeroes)
+    dq 0x%s
+    db '%s'%s""" % (name, name, size, name, zeroes)
 
 
 print "SECTION .symbols"

@@ -32,6 +32,8 @@ typedef struct thread {
     size_t event_timeout;
     size_t event_count;
     event_t event_abort;
+
+    uint64_t yield_target;
 } __attribute__((packed)) thread_t;
 
 typedef enum {
