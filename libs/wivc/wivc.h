@@ -68,6 +68,8 @@ typedef struct {
     uint8_t *buffer;
     uint32_t stride;
     size_t gpuFd;
+    uint32_t fbResID;
+    uint32_t cursorResID;
 } __attribute__((packed)) fb_context_t;
 
 typedef enum {
@@ -122,6 +124,8 @@ compositor_ctx_t *graphics_init_compositor();
 window_t *graphics_compositor_create_window(compositor_ctx_t *ctx, uint32_t width, uint32_t height);
 void graphics_compositor_flip(compositor_ctx_t *ctx, window_t *window);
 void graphics_compositor_move(compositor_ctx_t *ctx, window_t *window, int32_t x, int32_t y);
+
+void graphics_init_cursor(fb_context_t *ctx, uint32_t x, uint32_t y);
 
 //Menus
 #define MENU_BAR_HEIGHT 24

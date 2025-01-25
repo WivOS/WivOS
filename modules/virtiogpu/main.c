@@ -80,6 +80,8 @@ static size_t send_command_response_cursor(const void *cmd, size_t cmdLength, vo
     descriptor->length = resLength;
     descriptor->flags |= VIRTQ_DESC_F_WRITE;
 
+    memcpy(res, cmd, resLength);
+
     //printf("Sending\n");
     virtio_submit_descriptor(VirtioGpuDevice, 1, i, next);
     virtio_free_descriptor(VirtioGpuDevice, 1, next);
@@ -304,6 +306,7 @@ static size_t gpu_ioctl(vfs_node_t *node, size_t request, void *arg) {
                     kfree(req);
                 }
 
+                if(!virtioTransferAndFlush->notFlush)
                 {
                     virtio_gpu_resource_flush_t *req = (virtio_gpu_resource_flush_t *)kmalloc(sizeof(virtio_gpu_resource_flush_t));
                     req->header.type = VIRTIO_GPU_CMD_RESOURCE_FLUSH;
@@ -352,6 +355,31 @@ static size_t gpu_ioctl(vfs_node_t *node, size_t request, void *arg) {
 
                 reference->currentCtx = (virtgpu_ctx_t *)ctxNode->value;
 
+                return 0;
+            }
+        case VIRTGPU_IOCTL_UPDATE_CURSOR:
+            {
+                if(!arg || !reference->currentResource) return -1;
+
+                virtgpu_update_cursor_t *virtioUpdateCursor = (virtgpu_update_cursor_t *)arg;
+
+                list_node_t *resourceNode = list_get_indexed(reference->resources, virtioUpdateCursor->resourceID);
+                if(!resourceNode) return -1;
+
+                virtio_gpu_update_cursor_req_t *req = (virtio_gpu_update_cursor_req_t *)kmalloc(sizeof(virtio_gpu_update_cursor_req_t));
+                req->header.type = VIRTIO_GPU_CMD_UPDATE_CURSOR;
+                req->position.scanoutID = reference->currentResource->currentScanout.scanoutID;
+                req->position.x = virtioUpdateCursor->x;
+                req->position.y = virtioUpdateCursor->y;
+                req->hotX = virtioUpdateCursor->hotX;
+                req->hotY = virtioUpdateCursor->hotY;
+                req->resourceID = ((virtgpu_resource_t *)resourceNode->value)->id;
+
+                virtio_gpu_ctrl_hdr_t *res = NULL;
+                send_command_response_cursor(req, sizeof(virtio_gpu_update_cursor_req_t), (void **)&res, sizeof(virtio_gpu_ctrl_hdr_t));
+
+                kfree(res);
+                kfree(req);
                 return 0;
             }
         default:

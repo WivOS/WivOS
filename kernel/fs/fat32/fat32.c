@@ -260,12 +260,13 @@ size_t fat32_read(struct vfs_node *node, char *buffer, size_t size) {
     return read_size;
 }
 
-size_t fat32_lseek(vfs_node_t *node, size_t offset, size_t type) {
+size_t fat32_lseek(vfs_node_t *node, size_t offset_, size_t type) {
     fat32fs_device_t *device = (fat32fs_device_t *)node->data;
 
     spinlock_lock(&device->customData->lock);
 
-    size_t length = device->entry.directory.size;
+    int64_t length = device->entry.directory.size;
+    int64_t offset = (int64_t)offset_;
 
     switch(type) {
         case SEEK_SET:
@@ -527,21 +528,22 @@ vfs_node_t *fat32_finddir(vfs_node_t *node_dev, char *name, char **last_path) {
 }
 
 void fat32_print_tree(struct vfs_node *node, size_t parentOffset) {
-    fat32fs_custom_data_t *customData = (fat32fs_custom_data_t *)node->data;
-
-    spinlock_lock(&customData->lock);
-
-    uint32_t cluster = customData->root_dir_cluster;
-    size_t fat_length = customData->sectors_per_fat * 512;
-
-    uint32_t *fat = kmalloc(fat_length);
-    read_device_offset(customData->deviceNode, SECTOR_TO_OFFSET(customData->reserved_sectors), fat, fat_length);
-
-    fat32_index_directories(customData, fat, cluster, 0, parentOffset);
-
-    kfree(fat);
-
-    spinlock_unlock(&customData->lock);
+    return;
+    //fat32fs_custom_data_t *customData = (fat32fs_custom_data_t *)node->data;
+//
+    //spinlock_lock(&customData->lock);
+//
+    //uint32_t cluster = customData->root_dir_cluster;
+    //size_t fat_length = customData->sectors_per_fat * 512;
+//
+    //uint32_t *fat = kmalloc(fat_length);
+    //read_device_offset(customData->deviceNode, SECTOR_TO_OFFSET(customData->reserved_sectors), fat, fat_length);
+//
+    //fat32_index_directories(customData, fat, cluster, 0, parentOffset);
+//
+    //kfree(fat);
+//
+    //spinlock_unlock(&customData->lock);
 }
 
 size_t fat32_mount(struct vfs_node *node, char *device, size_t flags, char *path, void *data) {
@@ -587,7 +589,7 @@ size_t fat32_mount(struct vfs_node *node, char *device, size_t flags, char *path
 
 void fat32_init() {
     devfs_node_t *fat32Node = (devfs_node_t *)kmalloc(sizeof(devfs_node_t));
-    strcpy(fat32Node->name, "Fat32");
+    strcpy(fat32Node->name, "Fat32Dev");
     fat32Node->flags |= VFS_FILESYSTEM;
     fat32Node->functions.mount = fat32_mount;
     devfs_mount("fat32", fat32Node);

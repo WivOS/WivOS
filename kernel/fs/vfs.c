@@ -4,6 +4,7 @@
 
 #include "devfs/devfs.h"
 #include "fat32/fat32.h"
+#include "ext2/ext2.h"
 
 gentree_t *VFSTree;
 
@@ -68,6 +69,7 @@ void vfs_init() {
 
     //Init filesystems here
     fat32_init();
+    ext2_init();
 }
 
 static vfs_node_t *vfs_get_mountpoint_recursive(char **path, gentree_node_t *subroot) {

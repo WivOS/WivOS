@@ -46,6 +46,7 @@ SRCS += kernel/fs/devfs/devfs.c
 SRCS += kernel/fs/pipe/pipe.c
 SRCS += kernel/fs/partfs/partfs.c
 SRCS += kernel/fs/fat32/fat32.c
+SRCS += kernel/fs/ext2/ext2.c
 
 SRCS += kernel/modules/modules.c
 
@@ -134,7 +135,10 @@ qemu: $(BIN_DIR)/image.hdd
 	source ~/.bashrc && qemu-system-x86_64 -enable-kvm -cpu host -m 1024M -M q35 -bios boot/OVMF.fd -net none -smp 4 -drive file=$(BIN_DIR)/image.hdd,if=none,id=nvm -device nvme,serial=deadbeef,drive=nvm -debugcon stdio -device virtio-vga-gl,disable-legacy=on,xres=1280,yres=1024 -display sdl,gl=on -device qemu-xhci -device usb-kbd -device usb-tablet --no-reboot --no-shutdown
 
 qemu-debug:
-	qemu-system-x86_64 -enable-kvm -cpu host -m 1024M -M q35 -bios boot/OVMF.fd -net none -smp 4 -drive file=$(BIN_DIR)/image.hdd,if=none,id=nvm -device nvme,serial=deadbeef,drive=nvm -debugcon stdio -device virtio-vga-gl,xres=1280,yres=1024 -display sdl,gl=on --trace "virtio_gpu_cmd_*" -device qemu-xhci -device usb-kbd --trace "usb_desc_*" --no-reboot --no-shutdown -S -s
+	qemu-system-x86_64 -enable-kvm -cpu host -m 1024M -M q35 -bios boot/OVMF.fd -net none -smp 4 -drive file=$(BIN_DIR)/image.hdd,if=none,id=nvm -device nvme,serial=deadbeef,drive=nvm -debugcon stdio -device virtio-vga-gl,xres=1280,yres=1024 -display sdl,gl=on --trace "virtio_gpu_cmd_*" --trace "virtio*" -device qemu-xhci -device usb-kbd --no-reboot --no-shutdown
+
+qemu-dev: $(BIN_DIR)/image.hdd
+	source ~/.bashrc && qemu-system-x86_64 -enable-kvm -cpu host -m 1024M -M q35 -bios boot/OVMF.fd -net none -smp 4 -drive file=$(BIN_DIR)/image.hdd,if=none,id=nvm -device nvme,serial=deadbeef,drive=nvm -drive file=test.img,if=none,id=nvm_test -device nvme,serial=cafebabe,drive=nvm_test -debugcon stdio -device virtio-vga-gl,disable-legacy=on,xres=1280,yres=1024 -display sdl,gl=on -device qemu-xhci -device usb-kbd -device usb-tablet --no-reboot --no-shutdown
 
 clean:
 	rm -fr build

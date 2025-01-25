@@ -279,6 +279,7 @@ fb_context_t *graphics_init_fb_fs() {
 
     uint32_t resourceID = (uint32_t)ioctl(ctx->gpuFd, VIRTGPU_IOCTL_CREATE_RESOURCE_2D, (void *)&resourceData); //TODO: Maybe store this on ctx
     ioctl(ctx->gpuFd, VIRTGPU_IOCTL_SET_RESOURCE_ID, &resourceID);
+    ctx->fbResID = resourceID;
 
     uint32_t framebufferSize = resourceData.width * resourceData.height * 4;
     uint32_t *framebuffer = (uint32_t *)malloc(framebufferSize);
@@ -295,6 +296,55 @@ fb_context_t *graphics_init_fb_fs() {
     ctx->stride = 4 * ctx->width;
     ctx->size = 0;
     ctx->buffer = framebuffer;
+}
+
+void graphics_init_cursor(fb_context_t *ctx, uint32_t x, uint32_t y) {
+    virtgpu_create_resource_2d_t resourceData = {0};
+    virtgpu_attach_backing_t attachBackingData = {0};
+
+    resourceData.format = VIRTIO_GPU_FORMAT_B8G8R8A8_UNORM;
+    resourceData.width = 64;
+    resourceData.height = 64;
+
+    uint32_t resourceID = (uint32_t)ioctl(ctx->gpuFd, VIRTGPU_IOCTL_CREATE_RESOURCE_2D, (void *)&resourceData);
+    ioctl(ctx->gpuFd, VIRTGPU_IOCTL_SET_RESOURCE_ID, &resourceID);
+
+    ctx->cursorResID = resourceID;
+
+    virtgpu_update_cursor_t updateCursor = {0};
+    updateCursor.resourceID = resourceID;
+    updateCursor.x = x;
+    updateCursor.y = y;
+    updateCursor.hotX = 0;
+    updateCursor.hotY = 0;
+
+    uint32_t framebufferSize = resourceData.width * resourceData.height * 4;
+    uint32_t *framebuffer = (uint32_t *)malloc(framebufferSize);
+
+    attachBackingData.address = (uint64_t)framebuffer;
+    attachBackingData.length = framebufferSize;
+
+    ioctl(ctx->gpuFd, VIRTGPU_IOCTL_RESOURCE_ATTACH_BACKING, (void *)&attachBackingData);
+
+    for(int y = 0; y < 64; y++) {
+        for(int x = 0; x < 64; x++) {
+            if(x < 16 & y < 16)
+                framebuffer[y * 64 + x] = 0xFFFF0000; //R
+            else
+                framebuffer[y * 64 + x] = 0x00000000; //R
+        }
+    }
+
+    virtgpu_transfer_and_flush_t transferAndFlushData = {0};
+
+    transferAndFlushData.width = 64;
+    transferAndFlushData.height = 64;
+    transferAndFlushData.notFlush = 1;
+
+    ioctl(ctx->gpuFd, VIRTGPU_IOCTL_TRANSFER_AND_FLUSH, (void *)&transferAndFlushData);
+    ioctl(ctx->gpuFd, VIRTGPU_IOCTL_SET_RESOURCE_ID, &ctx->fbResID);
+
+    ioctl(ctx->gpuFd, VIRTGPU_IOCTL_UPDATE_CURSOR, (void *)&updateCursor);
 }
 
 fb_context_t *graphics_init_fb_space(fb_context_t *ctx, uint32_t x, uint32_t y, uint32_t width, uint32_t height) {

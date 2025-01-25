@@ -410,109 +410,117 @@ size_t nvme_lseek(vfs_node_t *node, size_t offset, size_t type) {
 }
 
 void nvme_init() {
-    NVMEDevices = (nvme_device_t *)kcalloc(sizeof(nvme_device_t), 1);
-
-    pci_device_t *pciDevice = pci_get_device(0x1, 0x8, 0x2, 0);
-    if(pciDevice == NULL) return;
-
-    pci_bar_t bar;
-    if(!pci_read_bar(pciDevice, 0, &bar)) {
-        printf("[NVME] Error on BAR #0\n");
-        return;
-    }
-
-    nvme_device_t device = {0};
-    size_t deviceId = 0; //TODO
-
-    pci_enable_busmastering(pciDevice);
-
-    nvme_regs_t *registers = (nvme_regs_t *)(bar.base + MEM_PHYS_OFFSET);
-    vmm_map_if_not_mapped(KernelPml4, (void *)registers, (void *)bar.base, ROUND_UP(bar.size, PAGE_SIZE) / PAGE_SIZE, 0x3);
-
-    pci_enable_mmio(pciDevice);
-
-    device.registers = registers;
-
-    printf("[NVME] Version 0x%X\n", registers->Version);
-
-    //Disable the controller
-    if(registers->ControllerConfig & NVME_CONFIG_ENABLE) {
-        registers->ControllerConfig &= ~NVME_CONFIG_ENABLE;
-    }
-    while(registers->ControllerStatus & NVME_STATUS_READY);
-
-    device.queue_slots = registers->Capabilities & 0xFFFF;
-    device.stride = (registers->Capabilities >> 32) & 0xF;
-    NVMEDevices[deviceId] = device;
-
-    nvme_initialize_queue(deviceId, &NVMEDevices[deviceId].queues[0], NVMEDevices[deviceId].queue_slots, 0);
-
-    uint32_t aqa = NVMEDevices[deviceId].queue_slots - 1;
-    aqa |= aqa << 16;
-    aqa |= aqa << 16;
-    registers->Aqa = aqa;
-    registers->Asq = (size_t)NVMEDevices[deviceId].queues[0].command - MEM_PHYS_OFFSET;
-    registers->Acq = (size_t)NVMEDevices[deviceId].queues[0].result - MEM_PHYS_OFFSET;
-    registers->ControllerConfig = NVME_CONFIG_CSS_NVM | NVME_CONFIG_ARB_RR | NVME_CONFIG_SHN_NONE |
-                                  NVME_CONFIG_IOSQES | NVME_CONFIG_IOCQES | NVME_CONFIG_ENABLE;
-
+    int NVMEDeviceCount = 0;
     while(true) {
-        uint32_t status = registers->ControllerStatus;
-        if(status & NVME_STATUS_READY) break;
-        else if(status & NVME_STATUS_FATAL_STATUS) {
-            printf("[NVME] Fatal error\n");
+        pci_device_t *pciDeviceTemp = pci_get_device(0x1, 0x8, 0x2, NVMEDeviceCount);
+        if(pciDeviceTemp == NULL) break;
+        NVMEDeviceCount++;
+    }
+
+    NVMEDevices = (nvme_device_t *)kcalloc(sizeof(nvme_device_t), NVMEDeviceCount);
+
+    for(int deviceIndex = 0; deviceIndex < NVMEDeviceCount; deviceIndex++) {
+        pci_device_t *pciDevice = pci_get_device(0x1, 0x8, 0x2, deviceIndex);
+        if(pciDevice == NULL) continue;
+
+        pci_bar_t bar;
+        if(!pci_read_bar(pciDevice, 0, &bar)) {
+            printf("[NVME] Error on BAR #0\n");
             return;
         }
+
+        nvme_device_t device = {0};
+
+        pci_enable_busmastering(pciDevice);
+
+        nvme_regs_t *registers = (nvme_regs_t *)(bar.base + MEM_PHYS_OFFSET);
+        vmm_map_if_not_mapped(KernelPml4, (void *)registers, (void *)bar.base, ROUND_UP(bar.size, PAGE_SIZE) / PAGE_SIZE, 0x3);
+
+        pci_enable_mmio(pciDevice);
+
+        device.registers = registers;
+
+        printf("[NVME] Version 0x%X\n", registers->Version);
+
+        //Disable the controller
+        if(registers->ControllerConfig & NVME_CONFIG_ENABLE) {
+            registers->ControllerConfig &= ~NVME_CONFIG_ENABLE;
+        }
+        while(registers->ControllerStatus & NVME_STATUS_READY);
+
+        device.queue_slots = registers->Capabilities & 0xFFFF;
+        device.stride = (registers->Capabilities >> 32) & 0xF;
+        NVMEDevices[deviceIndex] = device;
+
+        nvme_initialize_queue(deviceIndex, &NVMEDevices[deviceIndex].queues[0], NVMEDevices[deviceIndex].queue_slots, 0);
+
+        uint32_t aqa = NVMEDevices[deviceIndex].queue_slots - 1;
+        aqa |= aqa << 16;
+        aqa |= aqa << 16;
+        registers->Aqa = aqa;
+        registers->Asq = (size_t)NVMEDevices[deviceIndex].queues[0].command - MEM_PHYS_OFFSET;
+        registers->Acq = (size_t)NVMEDevices[deviceIndex].queues[0].result - MEM_PHYS_OFFSET;
+        registers->ControllerConfig = NVME_CONFIG_CSS_NVM | NVME_CONFIG_ARB_RR | NVME_CONFIG_SHN_NONE |
+                                    NVME_CONFIG_IOSQES | NVME_CONFIG_IOCQES | NVME_CONFIG_ENABLE;
+
+        while(true) {
+            uint32_t status = registers->ControllerStatus;
+            if(status & NVME_STATUS_READY) break;
+            else if(status & NVME_STATUS_FATAL_STATUS) {
+                printf("[NVME] Fatal error\n");
+                return;
+            }
+        }
+
+        printf("[NVME] Controller restarted\n");
+
+        nvme_id_ctrl_t *id = (nvme_id_ctrl_t *)kmalloc(sizeof(nvme_id_ctrl_t));
+        if(!nvme_identify(deviceIndex, id)) {
+            printf("[NVME] Failed to identify device\n");
+            return;
+        }
+
+        printf("[NVME] Serial number: %.20s\n", id->sn);
+        printf("[NVME] Model number: %.40s\n", id->mn);
+
+        kfree(id);
+
+        nvme_id_ns_t *id_ns = (nvme_id_ns_t *)kmalloc(sizeof(nvme_id_ns_t));
+        if(!nvme_get_ns_info(deviceIndex, 1, id_ns)) {
+            printf("[NVME] Failed to get Namespace info\n");
+            return;
+        }
+
+        size_t lbaShift = id_ns->lbaf[id_ns->flbas & NVME_NS_FLBAS_LBA_MASK].ds;
+        size_t maxLBAs = 1 << (NVMEDevices[deviceIndex].max_transfer_shift - lbaShift);
+        NVMEDevices[deviceIndex].max_prps = (maxLBAs * (1 << lbaShift)) / PAGE_SIZE;
+        NVMEDevices[deviceIndex].cache_block_size = (maxLBAs * (1 << lbaShift));
+
+        if(!nvme_create_queue_pair(deviceIndex, 1)) {
+            printf("[NVME] Failed to create the queue pair\n");
+            return;
+        }
+
+        NVMEDevices[deviceIndex].lba_size = 1 << id_ns->lbaf[id_ns->flbas & NVME_NS_FLBAS_LBA_MASK].ds;
+        NVMEDevices[deviceIndex].lba_count = id_ns->nsize;
+        NVMEDevices[deviceIndex].cache = kmalloc(sizeof(cached_block_t) * MAX_CACHED_BLOCKS);
+        NVMEDevices[deviceIndex].cache_overwrite_count = 0;
+        NVMEDevices[deviceIndex].lock = INIT_SPINLOCK();
+
+        printf("[NVME] Namespace 1 -> LBA Count: %d, LBA Size: %d\n", NVMEDevices[deviceIndex].lba_count, NVMEDevices[deviceIndex].lba_size);
+
+        static const char *devBaseName = "nvme";
+        char *devName = kmalloc(strlen((char *)devBaseName) + 2); // 2 just o be sure
+        sprintf(devName, "%s%d", devBaseName, deviceIndex);
+
+        devfs_node_t *nvmeNode = (devfs_node_t *)kmalloc(sizeof(devfs_node_t));
+        strcpy(nvmeNode->name, "NVMEFs");
+        nvmeNode->internIndex = deviceIndex;
+        nvmeNode->functions.read = nvme_read;
+        nvmeNode->functions.write = nvme_write;
+        nvmeNode->functions.lseek = nvme_lseek;
+        devfs_mount(devName, nvmeNode);
+
+        kfree(devName);
     }
-
-    printf("[NVME] Controller restarted\n");
-
-    nvme_id_ctrl_t *id = (nvme_id_ctrl_t *)kmalloc(sizeof(nvme_id_ctrl_t));
-    if(!nvme_identify(deviceId, id)) {
-        printf("[NVME] Failed to identify device\n");
-        return;
-    }
-
-    printf("[NVME] Serial number: %.20s\n", id->sn);
-    printf("[NVME] Model number: %.40s\n", id->mn);
-
-    kfree(id);
-
-    nvme_id_ns_t *id_ns = (nvme_id_ns_t *)kmalloc(sizeof(nvme_id_ns_t));
-    if(!nvme_get_ns_info(deviceId, 1, id_ns)) {
-        printf("[NVME] Failed to get Namespace info\n");
-        return;
-    }
-
-    size_t lbaShift = id_ns->lbaf[id_ns->flbas & NVME_NS_FLBAS_LBA_MASK].ds;
-    size_t maxLBAs = 1 << (NVMEDevices[deviceId].max_transfer_shift - lbaShift);
-    NVMEDevices[deviceId].max_prps = (maxLBAs * (1 << lbaShift)) / PAGE_SIZE;
-    NVMEDevices[deviceId].cache_block_size = (maxLBAs * (1 << lbaShift));
-
-    if(!nvme_create_queue_pair(deviceId, 1)) {
-        printf("[NVME] Failed to create the queue pair\n");
-        return;
-    }
-
-    NVMEDevices[deviceId].lba_size = 1 << id_ns->lbaf[id_ns->flbas & NVME_NS_FLBAS_LBA_MASK].ds;
-    NVMEDevices[deviceId].lba_count = id_ns->nsize;
-    NVMEDevices[deviceId].cache = kmalloc(sizeof(cached_block_t) * MAX_CACHED_BLOCKS);
-    NVMEDevices[deviceId].cache_overwrite_count = 0;
-    NVMEDevices[deviceId].lock = INIT_SPINLOCK();
-
-    printf("[NVME] Namespace 1 -> LBA Count: %d, LBA Size: %d\n", NVMEDevices[deviceId].lba_count, NVMEDevices[deviceId].lba_size);
-
-    static const char *devBaseName = "nvme";
-    char *devName = kmalloc(strlen((char *)devBaseName) + 2); // 2 just o be sure
-    sprintf(devName, "%s%d", devBaseName, deviceId);
-
-    devfs_node_t *nvmeNode = (devfs_node_t *)kmalloc(sizeof(devfs_node_t));
-    strcpy(nvmeNode->name, "NVMEFs");
-    nvmeNode->internIndex = deviceId;
-    nvmeNode->functions.read = nvme_read;
-    nvmeNode->functions.write = nvme_write;
-    nvmeNode->functions.lseek = nvme_lseek;
-    devfs_mount(devName, nvmeNode);
-
-    kfree(devName);
 }

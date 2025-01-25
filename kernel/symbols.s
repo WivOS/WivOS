@@ -326,6 +326,48 @@ kernel_symbols_start:
     dq 0x54b
     db 'exec', 0
 
+    extern ext2_finddir
+    align 8
+    dq ext2_finddir
+    dq 0x8e0
+    db 'ext2_finddir', 0
+
+    extern ext2_init
+    align 8
+    dq ext2_init
+    dq 0x11e
+    db 'ext2_init', 0
+
+    extern ext2_lseek
+    align 8
+    dq ext2_lseek
+    dq 0x795
+    db 'ext2_lseek', 0
+
+    extern ext2_mount
+    align 8
+    dq ext2_mount
+    dq 0x1212
+    db 'ext2_mount', 0
+
+    extern ext2_print_tree
+    align 8
+    dq ext2_print_tree
+    dq 0x315
+    db 'ext2_print_tree', 0
+
+    extern ext2_read
+    align 8
+    dq ext2_read
+    dq 0xcc3
+    db 'ext2_read', 0
+
+    extern ext2_readdir
+    align 8
+    dq ext2_readdir
+    dq 0xd
+    db 'ext2_readdir', 0
+
     extern fat32_finddir
     align 8
     dq fat32_finddir
@@ -341,7 +383,7 @@ kernel_symbols_start:
     extern fat32_lseek
     align 8
     dq fat32_lseek
-    dq 0x73c
+    dq 0x7ce
     db 'fat32_lseek', 0
 
     extern fat32_mount
@@ -353,7 +395,7 @@ kernel_symbols_start:
     extern fat32_print_tree
     align 8
     dq fat32_print_tree
-    dq 0x431
+    dq 0x6
     db 'fat32_print_tree', 0
 
     extern fat32_read
@@ -367,6 +409,12 @@ kernel_symbols_start:
     dq fat32_readdir
     dq 0xf6c
     db 'fat32_readdir', 0
+
+    extern find_file_inode_recursive
+    align 8
+    dq find_file_inode_recursive
+    dq 0x9b4
+    db 'find_file_inode_recursive', 0
 
     extern force_reschedule
     align 8
@@ -2057,7 +2105,7 @@ kernel_symbols_start:
     extern kentry_threaded
     align 8
     dq kentry_threaded
-    dq 0x521
+    dq 0x571
     db 'kentry_threaded', 0
 
     extern kernel_address_req
@@ -3149,7 +3197,7 @@ kernel_symbols_start:
     extern nvme_init
     align 8
     dq nvme_init
-    dq 0xeda
+    dq 0x12ce
     db 'nvme_init', 0
 
     extern nvme_lseek
@@ -3187,6 +3235,12 @@ kernel_symbols_start:
     dq nvme_write
     dq 0x90b
     db 'nvme_write', 0
+
+    extern parse_and_print_directory_recursive
+    align 8
+    dq parse_and_print_directory_recursive
+    dq 0xb5b
+    db 'parse_and_print_directory_recursive', 0
 
     extern partfs_init
     align 8
@@ -3695,7 +3749,7 @@ kernel_symbols_start:
     extern vfs_init
     align 8
     dq vfs_init
-    dq 0xf6
+    dq 0x101
     db 'vfs_init', 0
 
     extern vfs_ioctl

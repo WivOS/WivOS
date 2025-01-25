@@ -196,6 +196,22 @@ typedef struct {
     char debugName[64];
 } __attribute__((packed)) virtio_gpu_context_create_t;
 
+typedef struct {
+    uint32_t scanoutID;
+    uint32_t x;
+    uint32_t y;
+    uint32_t padding;
+} __attribute__((packed)) virtio_gpu_cursor_pos_t;
+
+typedef struct {
+    virtio_gpu_ctrl_hdr_t header;
+    virtio_gpu_cursor_pos_t position;
+    uint32_t resourceID;
+    uint32_t hotX;
+    uint32_t hotY;
+    uint32_t padding;
+} __attribute__((packed)) virtio_gpu_update_cursor_req_t;
+
 #define PIPE_BIND_DEPTH_STENCIL        (1 << 0) /* create_surface */
 #define PIPE_BIND_RENDER_TARGET        (1 << 1) /* create_surface */
 #define PIPE_BIND_BLENDABLE            (1 << 2) /* create_surface */
@@ -375,6 +391,7 @@ typedef struct {
 #define VIRTGPU_IOCTL_ATTACH_RESOURCE_3D 0xC
 #define VIRTGPU_IOCTL_TRANSFER_FROM_HOST_3D 0xD
 #define VIRTGPU_IOCTL_TRANSFER_TO_HOST_3D 0xF
+#define VIRTGPU_IOCTL_UPDATE_CURSOR 0x10
 
 typedef struct {
     uint32_t width;
@@ -411,6 +428,7 @@ typedef struct {
     uint32_t width;
     uint32_t height;
     uint32_t notTransfer;
+    uint32_t notFlush;
 } virtgpu_transfer_and_flush_t;
 
 typedef struct {
@@ -438,6 +456,14 @@ typedef struct {
 typedef struct {
     uint32_t resourceID;
 } virtgpu_attach_resource_3d_t;
+
+typedef struct {
+    uint32_t x;
+    uint32_t y;
+    uint32_t hotX;
+    uint32_t hotY;
+    uint32_t resourceID;
+} virtgpu_update_cursor_t;
 
 /** Polygon fill mode */
 #define PIPE_POLYGON_MODE_FILL  0

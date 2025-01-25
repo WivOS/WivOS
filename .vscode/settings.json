@@ -89,7 +89,8 @@
         "coroutine": "c",
         "wivc.h": "c",
         "usb.h": "c",
-        "typeindex": "c"
+        "typeindex": "c",
+        "devfs.h": "c"
     },
     "debug.onTaskErrors": "debugAnyway",
     "search.exclude": {

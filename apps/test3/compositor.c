@@ -62,6 +62,8 @@ int compositor_main() {
 
     graphics_fb_flip(ctx);
 
+    graphics_init_cursor(ctx, 100, 100);
+
     FILE *server = fopen("/dev/pmgr/compositor", "w+b");
     setbuf(server, NULL);
 

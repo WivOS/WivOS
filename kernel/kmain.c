@@ -90,6 +90,17 @@ void kentry() {
     while(1);
 }
 
+static void temp_print_buffer(const char *buffer, size_t size) {
+    for(int i = 0; i < size; i++) {
+        uint8_t value = *((uint8_t *)((uintptr_t)buffer + i));
+        if((i & 0xF) == 0xF || i == (size - 1)) {
+            printf("%02X\n", value);
+        } else {
+            printf("%02X, ", value);
+        }
+    }
+}
+
 void kentry_threaded() {
     printf("[Kentry] Threading reached\n");
 
@@ -98,13 +109,19 @@ void kentry_threaded() {
     pci_init();
 
     partfs_init("nvme0");
+    partfs_init("nvme1");
 
     vfs_node_t *fat32 = kopen("/dev/fat32", 0);
     vfs_node_mount(fat32, "/dev/nvme0p0", 0, "/", NULL);
     vfs_close(fat32);
     kfree(fat32);
 
-    //vfs_print_tree();
+    vfs_node_t *ext2 = kopen("/dev/ext2", 0);
+    vfs_node_mount(ext2, "/dev/nvme1p0", 0, "/ext2test/", NULL);
+    vfs_close(ext2);
+    kfree(ext2);
+
+    vfs_print_tree();
     modules_init();
 
     module_load("/test.wko");
