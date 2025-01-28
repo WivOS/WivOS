@@ -14,7 +14,7 @@
 #define _USERMODE_
 #include "../../modules/virtiogpu/virtiogpu.h"
 
-#include "compositor.h"
+#include "comp.h"
 
 static virtgpu_set_scanout_t scanoutData = {0};
 static gentree_t *window_tree = NULL;
@@ -95,7 +95,7 @@ int compositor_main() {
 
                     compositor_add_window(window);
 
-                    sprintf(response->ctx, "compositor.%lld", window->id);
+                    sprintf(response->ctx, "compositor.%ld", window->id);
                     window->ctx = strdup(response->ctx);
 
                     response->id = window->id;
@@ -111,7 +111,7 @@ int compositor_main() {
 					window->sprite->buffer = shm_open(response->ctx, &shmSize);
 					strcpy(response->ctx, window->ctx);
 
-					server_client_write(server, packet->source, response, sizeof(compositor_window_create_response_t));
+					server_client_write(server, packet->source, (uint8_t *)response, sizeof(compositor_window_create_response_t));
                     free(response);
 				}
 				break;
@@ -126,7 +126,7 @@ int compositor_main() {
                         redraw_windows(ctx);
                     }
 
-					server_client_write(server, packet->source, response, sizeof(compositor_window_draw_response_t));
+					server_client_write(server, packet->source, (uint8_t *)response, sizeof(compositor_window_draw_response_t));
                     free(response);
 				}
 				break;
@@ -143,12 +143,12 @@ int compositor_main() {
                         redraw_windows(ctx);
                     }
 
-					server_client_write(server, packet->source, response, sizeof(compositor_window_move_response_t));
+					server_client_write(server, packet->source, (uint8_t *)response, sizeof(compositor_window_move_response_t));
                     free(response);
 				}
                 break;
 			default:
-				printf("[PaketFS] Test Received: command 0x%X, id 0x%X\n", header->command);
+				printf("[PaketFS] Test Received: command 0x%X\n", header->command);
 		}
     }
 

@@ -90,7 +90,10 @@
         "wivc.h": "c",
         "usb.h": "c",
         "typeindex": "c",
-        "devfs.h": "c"
+        "devfs.h": "c",
+        "packetfs.h": "c",
+        "io_context": "cpp",
+        "stdlib.h": "c"
     },
     "debug.onTaskErrors": "debugAnyway",
     "search.exclude": {

@@ -12,7 +12,8 @@ OBJS := $(SRCS:%=$(BUILD_DIR)/%.o)
 external := $(OBJS:%.o=%.d)
 -include $(external)
 
-GCC := x86_64-wivos-gcc
+include $(MAIN_PATH)/env.mk
+GCC := $(TOOLPATH)/x86_64-wivos-gcc
 
 $(BUILD_DIR)/%.c.o: %.c
 	@mkdir -p $(@D)

@@ -4,7 +4,6 @@ APP_NAME := test3
 MAIN_PATH := ../..
 
 SRCS += main.c
-SRCS += common.c
 SRCS += compositor.c
 
 LINKS := -lwivc

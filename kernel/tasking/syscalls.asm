@@ -89,6 +89,7 @@ syscall_table:
 	extern syscall_tcb_set
 	extern syscall_fork
 	extern syscall_ioctl
+	extern syscall_execve
 	extern syscall_module_or_invalid
     dq syscall_debug 	; 0x0
 	dq syscall_read		; 0x1 -> read
@@ -100,5 +101,6 @@ syscall_table:
 	dq syscall_tcb_set	; 0x7 -> tcb_set
 	dq syscall_fork		; 0x8 -> fork
 	dq syscall_ioctl	; 0x9 -> ioctl
+	dq syscall_execve	; 0xA -> execve
     dq syscall_module_or_invalid
 .end:

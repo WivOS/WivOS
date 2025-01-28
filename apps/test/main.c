@@ -94,19 +94,19 @@ static sc_qword_t syscall6(int sc, sc_qword_t arg1, sc_qword_t arg2,
 }
 
 void debug_print(char *str) {
-    syscall1(SYS_DEBUG, str);
+    syscall1(SYS_DEBUG, (uint64_t)str);
 }
 
 size_t open(char *path, uint32_t mode) {
-    return syscall2(SYS_OPEN, path, mode);
+    return syscall2(SYS_OPEN, (sc_qword_t)path, (sc_qword_t)mode);
 }
 
 size_t write(size_t fd, char *buffer, size_t length) {
-    return syscall3(SYS_WRITE, fd, buffer, length);
+    return syscall3(SYS_WRITE, (sc_qword_t)fd, (sc_qword_t)buffer, (sc_qword_t)length);
 }
 
 size_t read(size_t fd, char *buffer, size_t length) {
-    return syscall3(SYS_READ, fd, buffer, length);
+    return syscall3(SYS_READ, (sc_qword_t)fd, (sc_qword_t)buffer, (sc_qword_t)length);
 }
 
 
@@ -125,21 +125,22 @@ typedef struct {
 
 void main() {
     debug_print("Hola");
-
-    size_t server_fd = open("/dev/pmgr/testServer", 0x10);
-
-    size_t client_fd = open("/dev/pmgr/testServer", 0);
-
-    uint8_t testBuffer[1024];
-    pmgr_header_t *testHeader = (pmgr_header_t *)testBuffer;
-
-    testHeader->target = NULL;
-    strcpy((char *)testHeader->data, "Hola\0");
-    write(server_fd, (char *)testBuffer, sizeof(pmgr_header_t) + 5);
-
-    size_t size = read(client_fd, (void *)testBuffer, 1024);
-    debug_print((char *)testBuffer);
-    //printf("[PaketFS] Test Received: %.*s\n", size, (char *)testBuffer);
-
     while(1);
+
+    //size_t server_fd = open("/dev/pmgr/testServer", 0x10);
+//
+    //size_t client_fd = open("/dev/pmgr/testServer", 0);
+//
+    //uint8_t testBuffer[1024];
+    //pmgr_header_t *testHeader = (pmgr_header_t *)testBuffer;
+//
+    //testHeader->target = NULL;
+    //strcpy((char *)testHeader->data, "Hola\0");
+    //write(server_fd, (char *)testBuffer, sizeof(pmgr_header_t) + 5);
+//
+    //size_t size = read(client_fd, (void *)testBuffer, 1024);
+    //debug_print((char *)testBuffer);
+    ////printf("[PaketFS] Test Received: %.*s\n", size, (char *)testBuffer);
+//
+    //while(1);
 }

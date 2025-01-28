@@ -8,9 +8,7 @@
 #define _USERMODE_
 #include "../../modules/virtiogpu/virtiogpu.h"
 
-#define _WIVC_LIB
-#include "../../apps/test3/compositor.h"
-#undef _WIVC_LIB
+#include "compositor.h"
 
 uint8_t fontBitmap[];
 

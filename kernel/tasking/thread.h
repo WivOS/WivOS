@@ -34,6 +34,8 @@ typedef struct thread {
     event_t event_abort;
 
     uint64_t yield_target;
+    void *memoryStackPhys;
+    uint32_t dont_save;
 } __attribute__((packed)) thread_t;
 
 typedef enum {
@@ -58,3 +60,4 @@ typedef struct {
     &((thread_parameter_exec_data_t){.entry=entry_, .argv=argv_, .envp=envp_, .value=value_, })
 
 ktid_t thread_create(kpid_t pid, thread_parameter_types_t dataType, void *data);
+ktid_t thread_recreate(kpid_t pid, kpid_t tid, thread_parameter_types_t dataType, void *data, bool free_args);

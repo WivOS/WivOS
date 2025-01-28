@@ -132,7 +132,11 @@ void scheduler_schedule(irq_regs_t *regs) {
 
     if(currentTaskID != -1) {
         volatile thread_t *thread = ActiveTasks[currentTaskID];
-        if(thread == NULL) goto skip;
+        if(thread == NULL || thread == (void *)-1) goto skip;
+        if(thread->dont_save != false) {
+            thread->dont_save = false;
+            goto skip;
+        }
 
         thread->saved_regs = *regs;
         thread->cpu_number = -1;

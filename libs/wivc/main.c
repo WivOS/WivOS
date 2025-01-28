@@ -3,14 +3,15 @@
 
 #include <stdint.h>
 
+#include <sys/ioctl.h>
+
 #include "wivc.h"
 
 #define _USERMODE_
 #include "../../modules/virtiogpu/virtiogpu.h"
 
-#define _WIVC_LIB
-#include "../../apps/test3/compositor.h"
-#undef _WIVC_LIB
+#include "compositor.h"
+#include "packetfs.h"
 
 list_t *list_create() {
     list_t *list = (list_t *)malloc(sizeof(list_t));
@@ -295,7 +296,9 @@ fb_context_t *graphics_init_fb_fs() {
     ctx->depth = 32;
     ctx->stride = 4 * ctx->width;
     ctx->size = 0;
-    ctx->buffer = framebuffer;
+    ctx->buffer = (uint8_t *)framebuffer;
+
+    return ctx;
 }
 
 void graphics_init_cursor(fb_context_t *ctx, uint32_t x, uint32_t y) {
@@ -328,7 +331,7 @@ void graphics_init_cursor(fb_context_t *ctx, uint32_t x, uint32_t y) {
 
     for(int y = 0; y < 64; y++) {
         for(int x = 0; x < 64; x++) {
-            if(x < 16 & y < 16)
+            if((x < 16) & (y < 16))
                 framebuffer[y * 64 + x] = 0xFFFF0000; //R
             else
                 framebuffer[y * 64 + x] = 0x00000000; //R
@@ -455,7 +458,7 @@ window_t *graphics_compositor_create_window(compositor_ctx_t *ctx, uint32_t widt
 	windowCreateHeader.height = height;
 
 	compositor_window_create_response_t *createResponse;
-	size_t size = compositor_client_send_wait(ctx->client, &windowCreateHeader, &createResponse, sizeof(compositor_window_create_t));
+	size_t size = compositor_client_send_wait(ctx->client, (compositor_header_t *)&windowCreateHeader, (compositor_response_header_t **)&createResponse, sizeof(compositor_window_create_t));
 
     window->width = width;
     window->height = height;
@@ -477,7 +480,7 @@ void graphics_compositor_flip(compositor_ctx_t *ctx, window_t *window) {
     windowDrawHeader.id = window->id;
 
 	compositor_window_draw_response_t *drawResponse;
-	size_t size = compositor_client_send_wait(ctx->client, &windowDrawHeader, &drawResponse, sizeof(compositor_window_draw_t));
+	size_t size = compositor_client_send_wait(ctx->client, (compositor_header_t *)&windowDrawHeader, (compositor_response_header_t **)&drawResponse, sizeof(compositor_window_draw_t));
 
 	free(drawResponse);
 }
@@ -491,7 +494,7 @@ void graphics_compositor_move(compositor_ctx_t *ctx, window_t *window, int32_t x
     windowMoveHeader.y = y;
 
 	compositor_window_move_response_t *moveResponse;
-	size_t size = compositor_client_send_wait(ctx->client, &windowMoveHeader, &moveResponse, sizeof(compositor_window_move_t));
+	size_t size = compositor_client_send_wait(ctx->client, (compositor_header_t *)&windowMoveHeader, (compositor_response_header_t **)&moveResponse, sizeof(compositor_window_move_t));
 
 	free(moveResponse);
 }

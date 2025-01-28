@@ -153,7 +153,7 @@ void kentry_threaded() {
     vfs_read(testfat, testArray, 2056);
     printf("%2056s\n", testArray);*/
 
-    const char *args[] = { "/tests/test2", NULL };
+    const char *args[] = { "/tests/init", NULL };
     const char *environ[] = { NULL };
 
     pt_t *pml4 = vmm_setup_pml4();
@@ -163,7 +163,7 @@ void kentry_threaded() {
     SchedulerProcesses[pid]->file_handles[0] = logNode;
     SchedulerProcesses[pid]->file_handles[1] = logNode;
     SchedulerProcesses[pid]->file_handles[2] = logNode;
-    exec(pid, "/tests/test3", args, environ);
+    exec(pid, "/tests/init", args, environ);
 
     printf("Init Done pid:%d, page_table:%llx\n", pid, SchedulerProcesses[pid]->page_table->entries);
 

@@ -5,6 +5,7 @@
 
 #include <mem/pmm.h>
 #include <mem/vmm.h>
+#include <cpu/cpu.h>
 
 #include <tasking/scheduler.h>
 
@@ -430,6 +431,86 @@ bool exec(kpid_t pid, const char *filename, const char *argv[], const char *envp
 
     ktid_t tid = thread_create(pid, thread_parameter_exec, thread_call_data((void *)entry, argv, envp, &value));
     scheduler_add_task(pid, tid);
+
+    return true;
+}
+
+extern void force_reschedule();
+bool execve(kpid_t pid, const char *filename, const char *argv[], const char *envp[]) {
+    process_t *process = SchedulerProcesses[pid];
+    spinlock_lock(&process->lock);
+    pt_t *oldPagemap = (pt_t *)process->page_table;
+
+    vfs_node_t *programNode = kopen(filename, 0);
+    if(!programNode) {
+        spinlock_unlock(&process->lock);
+        return false;
+    }
+
+    pt_t *pml4 = vmm_setup_pml4();
+
+    char *ldPath = NULL;
+
+    elf_value_t value = (elf_value_t){0};
+    elf_load(programNode, pml4, 0, &value, &ldPath);
+
+    vfs_close(programNode);
+    kfree(programNode);
+
+    uint64_t entry = 0;
+    if(!ldPath) entry = value.entry;
+    else {
+        programNode = kopen(ldPath, 0);
+        printf("Linker: %s\n", ldPath);
+
+        elf_value_t ld_value = {0};
+        elf_load(programNode, pml4, 0x40000000, &ld_value, NULL);
+        vfs_close(programNode);
+        kfree(programNode);
+
+        kfree(ldPath);
+        entry = ld_value.entry;
+    }
+
+    for(size_t i = 256; i < 512; i++) {
+        ((pt_entries_t *)((size_t)pml4->entries + MEM_PHYS_OFFSET))->entries[i] = ((pt_entries_t *)((size_t)SchedulerProcesses[0]->page_table->entries + MEM_PHYS_OFFSET))->entries[i];
+    }
+
+    //Destroy threads here when implementing real threading on user space
+
+    for(ktid_t tid = 0; tid < MAX_THREADS; tid++) {
+        volatile thread_t *thread = process->threads[tid];
+        if(thread != NULL && thread != (void *)-1) {
+            if(thread->taskID != (ktid_t)-1) {
+                ActiveTasks[thread->taskID] = (volatile thread_t *)NULL; //TODO: Move this to scheduler
+            }
+
+            thread->taskID = -1; //Indicate this thread is dead, TODO: Delte this thread when rescheduling
+        }
+    }
+
+    //Delete all threads, i will use thread zero later
+    for(ktid_t tid = 1; tid < MAX_THREADS; tid++) {
+        volatile thread_t *thread = process->threads[tid];
+        if(thread != NULL && thread != (void *)-1) {
+            process->threads[tid] = (volatile thread_t *)NULL;
+            kfree((void *)thread->fxstate);
+            if(thread->kstack_address) kfree((void *)thread->kstack_address);
+            if(thread->memoryStackPhys) pmm_free(thread->memoryStackPhys, 4);
+            kfree((void *)thread);
+        }
+    }
+
+    process->page_table = pml4;
+    kfree((void *)filename); //TODO: This should be handled in other way
+    spinlock_unlock(&process->lock);
+
+    ktid_t tid = thread_recreate(pid, 0, thread_parameter_exec, thread_call_data((void *)entry, argv, envp, &value), true);
+    scheduler_add_task(pid, tid);
+
+    vmm_free_pml4(oldPagemap);
+
+    force_reschedule();
 
     return true;
 }

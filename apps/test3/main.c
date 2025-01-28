@@ -143,7 +143,15 @@ void main() {
     fprintf(stderr, "Hola\n");
 
     if(!compositor_main()) //TODO: Implement fd duping
-        client_fun();
+	{
+		//client_fun();
+		const char *path = "/tests/test2";
+		const char *args[] = { path, NULL };
+		const char *environ[] = { NULL };
+		execve(path, args, environ);
+		while(1);
+		//TODO: Execve is not working correclty
+	}
 }
 
 //Server -> Client

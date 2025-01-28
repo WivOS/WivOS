@@ -333,6 +333,47 @@ size_t syscall_ioctl(irq_regs_t *regs) {
     return retValue;
 }
 
+//IoCtl: [rdi] Path, [rsi] argv, [rdx] envp
+size_t syscall_execve(irq_regs_t *regs) {
+    char *path = (char *)regs->rdi;
+    const char **argv = (const char **)regs->rsi;
+    const char **envp = (const char **)regs->rdx;
+
+    if(syscall_privilege_check((void *)path, 1)) return -1; //TODO: Add checks for the entire size
+    if(syscall_privilege_check((void *)argv, 1)) return -1; //TODO: Add checks for the entire size
+    if(syscall_privilege_check((void *)envp, 1)) return -1; //TODO: Add checks for the entire size
+
+    //Copy arguments to kernel space
+    char *copyPath = strdup(path);
+
+    size_t nenv = 0;
+    for(char **elem = (char **)envp; *elem; elem++) {
+        nenv++;
+    }
+    char **copyNenv = kcalloc(nenv + 1, sizeof(char*));
+    copyNenv[nenv] = (char *)NULL;
+    for(int i = 0; i < nenv; i++) {
+        copyNenv[i] = strdup((char *)envp[i]);
+    }
+
+    size_t nargs = 0;
+    for(char **elem = (char **)argv; *elem; elem++) {
+        nargs++;
+    }
+    char **copyArgv = kcalloc(nargs + 1, sizeof(char*));
+    copyArgv[nargs] = (char *)NULL;
+    for(int i = 0; i < nargs; i++) {
+        copyArgv[i] = strdup((char *)argv[i]);
+    }
+
+    spinlock_lock(&SchedulerLock);
+    kpid_t pid = CPULocals[CurrentCPU].currentPid;
+    size_t retValue = (size_t)execve(pid, (const char *)copyPath, (const char **)copyArgv, (const char **)copyNenv);
+    spinlock_unlock(&SchedulerLock);
+
+    return retValue;
+}
+
 static spinlock_t syscall_function_lock = INIT_SPINLOCK();
 static syscall_fn_t syscall_module_functions[MAX_MODULE_SYSCALLS];
 static size_t syscall_module_functions_length = 0;

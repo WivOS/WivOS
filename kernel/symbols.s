@@ -326,6 +326,12 @@ kernel_symbols_start:
     dq 0x54b
     db 'exec', 0
 
+    extern execve
+    align 8
+    dq execve
+    dq 0x8a2
+    db 'execve', 0
+
     extern ext2_finddir
     align 8
     dq ext2_finddir
@@ -3467,7 +3473,7 @@ kernel_symbols_start:
     extern scheduler_schedule
     align 8
     dq scheduler_schedule
-    dq 0xadb
+    dq 0xb16
     db 'scheduler_schedule', 0
 
     extern scheduler_schedule_smp
@@ -3620,6 +3626,12 @@ kernel_symbols_start:
     dq 0x0
     db 'syscall_entry', 0
 
+    extern syscall_execve
+    align 8
+    dq syscall_execve
+    dq 0x764
+    db 'syscall_execve', 0
+
     extern syscall_fork
     align 8
     dq syscall_fork
@@ -3695,8 +3707,14 @@ kernel_symbols_start:
     extern thread_create
     align 8
     dq thread_create
-    dq 0x193a
+    dq 0x1a0b
     db 'thread_create', 0
+
+    extern thread_recreate
+    align 8
+    dq thread_recreate
+    dq 0x1e12
+    db 'thread_recreate', 0
 
     extern thread_sleep
     align 8

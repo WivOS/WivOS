@@ -42,3 +42,4 @@ typedef struct {
 
 bool elf_load(vfs_node_t *node, void *pml4, size_t base, elf_value_t *value, char **out_ld_path);
 bool exec(size_t pid, const char *filename, const char *argv[], const char *envp[]);
+bool execve(size_t pid, const char *filename, const char *argv[], const char *envp[]);
