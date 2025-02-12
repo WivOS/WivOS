@@ -37,6 +37,7 @@
 global syscall_entry
 align 16
 syscall_entry:
+	cli
 	mov qword [gs:0024], rsp
     mov rsp, qword [gs:0016]
 
@@ -90,17 +91,19 @@ syscall_table:
 	extern syscall_fork
 	extern syscall_ioctl
 	extern syscall_execve
+	extern syscall_load_module
 	extern syscall_module_or_invalid
-    dq syscall_debug 	; 0x0
-	dq syscall_read		; 0x1 -> read
-	dq syscall_write	; 0x2 -> write
-	dq syscall_open		; 0x3 -> open
-	dq syscall_close	; 0x4 -> close
-	dq syscall_alloc	; 0x5 -> alloc
-	dq syscall_seek		; 0x6 -> seek
-	dq syscall_tcb_set	; 0x7 -> tcb_set
-	dq syscall_fork		; 0x8 -> fork
-	dq syscall_ioctl	; 0x9 -> ioctl
-	dq syscall_execve	; 0xA -> execve
+    dq syscall_debug 	   ; 0x0
+	dq syscall_read		   ; 0x1 -> read
+	dq syscall_write	   ; 0x2 -> write
+	dq syscall_open		   ; 0x3 -> open
+	dq syscall_close	   ; 0x4 -> close
+	dq syscall_alloc	   ; 0x5 -> alloc
+	dq syscall_seek		   ; 0x6 -> seek
+	dq syscall_tcb_set	   ; 0x7 -> tcb_set
+	dq syscall_fork		   ; 0x8 -> fork
+	dq syscall_ioctl	   ; 0x9 -> ioctl
+	dq syscall_execve	   ; 0xA -> execve
+	dq syscall_load_module ; 0xB -> load_module
     dq syscall_module_or_invalid
 .end:

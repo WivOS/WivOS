@@ -93,7 +93,9 @@
         "devfs.h": "c",
         "packetfs.h": "c",
         "io_context": "cpp",
-        "stdlib.h": "c"
+        "stdlib.h": "c",
+        "fcntl.h": "c",
+        "source_location": "c"
     },
     "debug.onTaskErrors": "debugAnyway",
     "search.exclude": {

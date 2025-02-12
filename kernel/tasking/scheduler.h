@@ -17,6 +17,7 @@ extern volatile thread_t *ActiveTasks[MAX_THREADS*2];
 
 extern volatile spinlock_t ReSchedulerLock;
 extern volatile spinlock_t SchedulerLock;
+extern volatile spinlock_t SecondSchedulerLock;
 
 void scheduler_init(void *first_task);
 ktid_t scheduler_add_task(kpid_t pid, ktid_t tid);

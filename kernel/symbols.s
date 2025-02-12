@@ -80,6 +80,12 @@ kernel_symbols_start:
     dq 0x1
     db 'SchedulerRunning', 0
 
+    extern SecondSchedulerLock
+    align 8
+    dq SecondSchedulerLock
+    dq 0x20
+    db 'SecondSchedulerLock', 0
+
     extern TYPE_CHECK_KINFS
     align 8
     dq TYPE_CHECK_KINFS
@@ -329,7 +335,7 @@ kernel_symbols_start:
     extern execve
     align 8
     dq execve
-    dq 0x8a2
+    dq 0x921
     db 'execve', 0
 
     extern ext2_finddir
@@ -2111,7 +2117,7 @@ kernel_symbols_start:
     extern kentry_threaded
     align 8
     dq kentry_threaded
-    dq 0x571
+    dq 0x437
     db 'kentry_threaded', 0
 
     extern kernel_address_req
@@ -3167,8 +3173,14 @@ kernel_symbols_start:
     extern module_load
     align 8
     dq module_load
-    dq 0x142e
+    dq 0x4b
     db 'module_load', 0
+
+    extern module_load_node
+    align 8
+    dq module_load_node
+    dq 0x1437
+    db 'module_load_node', 0
 
     extern modules_init
     align 8
@@ -3473,7 +3485,7 @@ kernel_symbols_start:
     extern scheduler_schedule
     align 8
     dq scheduler_schedule
-    dq 0xb16
+    dq 0xaca
     db 'scheduler_schedule', 0
 
     extern scheduler_schedule_smp
@@ -3635,7 +3647,7 @@ kernel_symbols_start:
     extern syscall_fork
     align 8
     dq syscall_fork
-    dq 0x811
+    dq 0x88a
     db 'syscall_fork', 0
 
     extern syscall_install
@@ -3649,6 +3661,12 @@ kernel_symbols_start:
     dq syscall_ioctl
     dq 0x3f3
     db 'syscall_ioctl', 0
+
+    extern syscall_load_module
+    align 8
+    dq syscall_load_module
+    dq 0x378
+    db 'syscall_load_module', 0
 
     extern syscall_module_or_invalid
     align 8
@@ -3713,7 +3731,7 @@ kernel_symbols_start:
     extern thread_recreate
     align 8
     dq thread_recreate
-    dq 0x1e12
+    dq 0x1ebe
     db 'thread_recreate', 0
 
     extern thread_sleep

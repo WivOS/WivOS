@@ -1,4 +1,4 @@
-CFLAGS := -fno-pie -g -mno-red-zone -Wall -ffreestanding -Werror -Wno-unused-variable -Wno-unused-function -fno-pic -I$(MAIN_PATH)/kernel -I$(MAIN_PATH)/external/lai/include -O2 -mcmodel=large -mstack-alignment=8
+CFLAGS := -fno-pie -mno-red-zone -Wall -ffreestanding -Werror -Wno-unused-variable -Wno-unused-function -fno-pic -I$(MAIN_PATH)/kernel -I$(MAIN_PATH)/external/lai/include -O2 -mcmodel=large -mstack-alignment=8
 
 ifeq ($(DEBUG), 1)
 	BIN_DIR := bin/DEBUG

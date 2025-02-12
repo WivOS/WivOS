@@ -15,6 +15,7 @@ static size_t TotalActiveTasks = 0;
 
 volatile spinlock_t ReSchedulerLock = INIT_SPINLOCK();
 volatile spinlock_t SchedulerLock = INIT_SPINLOCK();
+volatile spinlock_t SecondSchedulerLock = INIT_SPINLOCK();
 
 uint8_t* DefaultFxstate;
 
@@ -97,6 +98,7 @@ __attribute__((noinline)) static void scheduler_idle_halt() {
     CPULocals[_CurrentCPU].currentPid = -1;
     CPULocals[_CurrentCPU].currentTid = -1;
 
+    spinlock_unlock(&SecondSchedulerLock);
     spinlock_unlock(&SchedulerLock);
     spinlock_unlock(&ReSchedulerLock);
     __asm__ __volatile__("sti; 1: hlt; jmp 1b;");
@@ -120,7 +122,14 @@ int printf_scheduler(const char *format, ...);
 void scheduler_schedule(irq_regs_t *regs) {
     spinlock_lock(&ReSchedulerLock);
 
+    asm("cli");
     if(!spinlock_try_lock(&SchedulerLock)) {
+        spinlock_unlock(&ReSchedulerLock);
+        return;
+    }
+
+    if(!spinlock_try_lock(&SecondSchedulerLock)) {
+        spinlock_unlock(&SchedulerLock);
         spinlock_unlock(&ReSchedulerLock);
         return;
     }
@@ -133,16 +142,17 @@ void scheduler_schedule(irq_regs_t *regs) {
     if(currentTaskID != -1) {
         volatile thread_t *thread = ActiveTasks[currentTaskID];
         if(thread == NULL || thread == (void *)-1) goto skip;
-        if(thread->dont_save != false) {
-            thread->dont_save = false;
-            goto skip;
-        }
+        //if(thread->dont_save != false) {
+        //    thread->dont_save = false;
+        //    goto skip;
+        //}
 
+        //memcpy((void *)&thread->saved_regs, regs, sizeof(irq_regs_t));
         thread->saved_regs = *regs;
         thread->cpu_number = -1;
-        if(currentPid) { //User mode
-            cpu_save_simd((uint8_t *)thread->fxstate);
 
+        cpu_save_simd((uint8_t *)thread->fxstate);
+        if(currentPid) { //User mode
             thread->ustack_address = (void *)cpuLocal->threadUserStack;
         }
 
@@ -159,11 +169,10 @@ void scheduler_schedule(irq_regs_t *regs) {
     cpuLocal->currentTid = nextTask->tid;
     cpuLocal->currentTaskID = nextTask->taskID;
 
+    cpu_restore_simd((uint8_t *)nextTask->fxstate);
     if(nextTask->pid != 0) {
         cpuLocal->threadKernelStack = (size_t)nextTask->kstack_address;
         cpuLocal->threadUserStack = (size_t)nextTask->ustack_address;
-
-        cpu_restore_simd((uint8_t *)nextTask->fxstate);
 
         load_fs_base(nextTask->fs_base);
     }

@@ -31,6 +31,7 @@ smp_init_trampoline:
     mov rax, 0x1
     ret
 
+extern SecondSchedulerLock
 extern SchedulerLock
 extern ReSchedulerLock
 
@@ -67,12 +68,14 @@ scheduler_switch_task:
 
     add rsp, 16 ; Skip int_no and err
 
+    lock inc dword [SecondSchedulerLock]
     lock inc dword [SchedulerLock]
     lock inc dword [ReSchedulerLock]
 
     iretq
 
 extern scheduler_schedule_smp
+extern scheduler_schedule
 global force_reschedule
 force_reschedule:
     cli
@@ -105,11 +108,14 @@ force_reschedule:
 	push r15
 
     lock inc dword [SchedulerLock]
+    ;lock btsw [SchedulerLock]
 
     mov rdi, rsp
 .retry:
     xor rbp, rbp
     call scheduler_schedule_smp
+    ;xor rbp, rbp
+    ;call scheduler_schedule
     jmp .retry
 
 .done:

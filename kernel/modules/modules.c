@@ -81,13 +81,7 @@ typedef struct {
     uint64_t align;
 } __attribute__((packed)) elf64_program_header_t;
 
-bool module_load(char *path) __attribute__((no_sanitize("alignment"))) {
-    vfs_node_t *elfNode = kopen(path, 0);
-    if(!elfNode) {
-        printf("asa1\n");
-        return false;
-    }
-
+bool module_load_node(vfs_node_t *elfNode) __attribute__((no_sanitize("alignment"))) {
     vfs_lseek(elfNode, 0, SEEK_SET);
 
     elf64_header_t header;
@@ -242,7 +236,7 @@ bool module_load(char *path) __attribute__((no_sanitize("alignment"))) {
                             uint64_t value = tableEntry->addend + symbolAddress;
                             uint32_t truncatedValue = value;
                             if(value != truncatedValue) {
-                                printf("Relocation R_AMD64_32 doesn't match the original value: %s %llx %llx\n", name);
+                                printf("Relocation R_AMD64_32 doesn't match the original value: %s %llx %llx\n", name, value, truncatedValue);
 
                                 kfree(symbol_rela);
                                 failed = true;
@@ -306,10 +300,22 @@ clean:
     kfree(shstrtab);
     kfree(section_table);
 
+    return !failed;
+}
+
+bool module_load(char *path) {
+    vfs_node_t *elfNode = kopen(path, 0);
+    if(!elfNode) {
+        printf("asa1\n");
+        return false;
+    }
+
+    bool result = module_load_node(elfNode);
+
     vfs_close(elfNode);
     kfree(elfNode);
 
-    return !failed;
+    return result;
 }
 
 bool elf_load(vfs_node_t *node, void *pml4, size_t base, elf_value_t *value, char **out_ld_path) {
@@ -502,6 +508,7 @@ bool execve(kpid_t pid, const char *filename, const char *argv[], const char *en
     }
 
     process->page_table = pml4;
+    process->current_alloc_address = BASE_ALLOC_ADDRESS;
     kfree((void *)filename); //TODO: This should be handled in other way
     spinlock_unlock(&process->lock);
 
@@ -509,7 +516,10 @@ bool execve(kpid_t pid, const char *filename, const char *argv[], const char *en
     scheduler_add_task(pid, tid);
 
     vmm_free_pml4(oldPagemap);
+    printf("Reached rescheduling\n");
 
+    volatile cpu_t *cpuLocal = &CPULocals[CurrentCPU];
+    cpuLocal->currentTaskID = -1;
     force_reschedule();
 
     return true;

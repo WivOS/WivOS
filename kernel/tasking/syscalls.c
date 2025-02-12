@@ -293,6 +293,9 @@ size_t syscall_fork(irq_regs_t *regs) {
     new_thread->saved_regs = *(volatile irq_regs_t *)regs;
     new_thread->saved_regs.rax = 0;
     new_thread->fxstate = kmalloc(CpuSimdRegionSize);
+    new_thread->yield_target = 0;
+    new_thread->memoryStackPhys = NULL;
+    new_thread->dont_save = false;
 
     cpu_save_simd((void *)new_thread->fxstate);
 
@@ -372,6 +375,39 @@ size_t syscall_execve(irq_regs_t *regs) {
     spinlock_unlock(&SchedulerLock);
 
     return retValue;
+}
+
+//load_module: [rdi] File descriptor, [rsi] flags
+size_t syscall_load_module(irq_regs_t *regs) {
+    int fd = (int)regs->rdi;
+    uint64_t flags = regs->rsi;
+
+    if(fd >= MAX_FILE_HANDLES || fd < 0) return -1;
+
+    //TODO: Errno
+
+    spinlock_lock(&SchedulerLock);
+    kpid_t pid = CPULocals[CurrentCPU].currentPid;
+    process_t *process = SchedulerProcesses[pid];
+    spinlock_unlock(&SchedulerLock);
+
+    spinlock_lock(&process->file_handles_lock);
+
+    vfs_node_t *node = (vfs_node_t *)process->file_handles[fd];
+    if(!node || node == (void *)-1) {
+        spinlock_unlock(&process->file_handles_lock);
+        return -1;
+    }
+
+    //TODO: Check that user is root
+
+    //spinlock_try_lock(&SecondSchedulerLock);
+    bool retValue = module_load_node(node);
+    //spinlock_unlock(&SecondSchedulerLock);
+
+    spinlock_unlock(&process->file_handles_lock);
+
+    return (retValue == true) ? 0 : -1;
 }
 
 static spinlock_t syscall_function_lock = INIT_SPINLOCK();

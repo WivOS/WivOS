@@ -138,6 +138,7 @@ done: (void)tid;
     return tid;
 }
 
+//TODO: Second execve is causing a hang on that thread
 ktid_t thread_recreate(kpid_t pid, kpid_t tid, thread_parameter_types_t dataType, void *data, bool free_args) {
     process_t *process = SchedulerProcesses[pid];
     if(process == NULL || process->threads[tid] == NULL || process->threads[tid] == (void *)-1) {
@@ -146,8 +147,10 @@ ktid_t thread_recreate(kpid_t pid, kpid_t tid, thread_parameter_types_t dataType
     spinlock_lock(&process->lock);
 
     thread_t *newThread = (thread_t *)process->threads[tid];
-    spinlock_try_lock(&newThread->lock);
-    spinlock_unlock(&newThread->lock);
+    if(spinlock_try_lock(&newThread->lock)) {
+        spinlock_unlock(&newThread->lock);
+    }
+    newThread->lock = INIT_SPINLOCK();
     newThread->pid = pid;
     newThread->tid = tid;
     newThread->cpu_number = -1;

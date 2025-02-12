@@ -26,7 +26,7 @@ static bool virtiogpu_event_handler(irq_regs_t *regs, size_t queue, size_t descr
             __atomic_thread_fence(__ATOMIC_SEQ_CST);
             VirtioGpuConfig->events_clear = VirtioGpuConfig->events_read;
 
-            printf("Event received\n");
+            //printf("Event received\n");
 
             event_notify(&virtiogpu_event);
 

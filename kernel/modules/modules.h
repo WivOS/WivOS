@@ -31,6 +31,7 @@ extern hashmap_t *KernelSymbolsHashmap;
 
 void modules_init();
 
+bool module_load_node(vfs_node_t *elfNode);
 bool module_load(char *path);
 
 typedef struct {
